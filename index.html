@@ -319,6 +319,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   /* ================= constants ================= */
   const STORE_KEY = "anchor-blank-v1";
+  const THEME_KEY = "anchor-blank-theme";
+  const THEMES = { auto: "跟随系统", light: "浅色", dark: "深色" };
   const DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const KINDS = { anchor: "锚点", flex: "弹性", blank: "留白" };
   const KIND_HINT = {
@@ -381,9 +383,19 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   /* ================= state ================= */
   let state = load();
-  let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "" };
+  let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme() };
+  applyTheme(ui.theme);
   const hashTab = (location.hash || "").slice(1);
   if (["week", "menu", "review", "rhythm"].includes(hashTab)) ui.tab = hashTab;
+
+  function loadTheme() {
+    try { const t = localStorage.getItem(THEME_KEY); if (t in THEMES) return t; } catch (e) { /* ignore */ }
+    return "auto";
+  }
+  function applyTheme(t) {
+    if (t === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", t);
+  }
 
   function freshState() {
     return {
@@ -669,6 +681,10 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     html += `<section class="section"><div class="btn-row">
       <button class="ghost ${armedApply ? "armed" : ""}" data-act="apply-tpl">${armedApply ? "确认：用模板重置本周" : "用模板重置本周（已打分的保留）"}</button></div></section>`;
 
+    html += `<section class="section"><h2>外观</h2>
+      <div class="seg" role="group" aria-label="外观">${Object.entries(THEMES).map(([k, v]) => `<button data-act="theme" data-theme="${k}" aria-pressed="${ui.theme === k}">${v}</button>`).join("")}</div>
+      <p class="lead">「跟随系统」会随手机的深色 / 浅色设置自动切换。</p></section>`;
+
     html += `<section class="section"><h2>备份与恢复</h2>
       <p class="lead">数据只存在这个浏览器里。换手机或清理浏览器前，先复制一份备份。</p>
       <div class="btn-row"><button class="ghost" data-act="make-backup">生成备份</button>
@@ -860,6 +876,11 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       const fresh = fromTemplate(state.template);
       w.days = w.days.map((d, i) => [...d.filter((e) => e.score), ...fresh[i]]);
       save(); toast("本周已按模板重置");
+    },
+    theme: (el) => {
+      ui.theme = el.dataset.theme;
+      applyTheme(ui.theme);
+      try { localStorage.setItem(THEME_KEY, ui.theme); } catch (e) { /* ignore */ }
     },
     "make-backup": () => { ui.backup = JSON.stringify(state); },
     "copy-backup": () => {

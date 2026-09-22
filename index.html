@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>锚点与留白</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;900&display=swap">
+<style>
+:root {
+  --bg: #EDF1EF;
+  --surface: #FFFFFF;
+  --surface-2: #E2E8E5;
+  --ink: #1B2623;
+  --ink-2: #56645F;
+  --ink-3: #87948F;
+  --line: #D2DAD6;
+  --anchor: #1F5E57;
+  --anchor-soft: #D5E7E2;
+  --on-anchor: #FFFFFF;
+  --flex: #A9651A;
+  --flex-soft: #F5E5CE;
+  --blank: #6F6893;
+  --blank-soft: #E6E4EF;
+  --good: #2F7D4F;
+  --bad: #B0493A;
+  --c0: #1F5E57;
+  --c1: #5E8F4B;
+  --c2: #33729C;
+  --c3: #9A4F80;
+  --c4: #BD8526;
+  --c5: #B85A48;
+  --shadow: 0 10px 40px rgba(20, 40, 35, .18);
+  --serif: "Noto Serif SC", "Songti SC", "STSong", serif;
+  --sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #101615; --surface: #19211F; --surface-2: #222C29; --ink: #E2E9E6; --ink-2: #9AA8A3; --ink-3: #6D7B76; --line: #2C3835;
+    --anchor: #6DBDAF; --anchor-soft: #1C3430; --on-anchor: #0C1715;
+    --flex: #E2A55E; --flex-soft: #3A2B18; --blank: #AFA8D2; --blank-soft: #29273A;
+    --good: #7CC79A; --bad: #E78A7A;
+    --c0: #6DBDAF; --c1: #93C07F; --c2: #7FB2D6; --c3: #D291BD; --c4: #E3B55E; --c5: #E39482;
+    --shadow: 0 10px 40px rgba(0, 0, 0, .5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #101615; --surface: #19211F; --surface-2: #222C29; --ink: #E2E9E6; --ink-2: #9AA8A3; --ink-3: #6D7B76; --line: #2C3835;
+  --anchor: #6DBDAF; --anchor-soft: #1C3430; --on-anchor: #0C1715;
+  --flex: #E2A55E; --flex-soft: #3A2B18; --blank: #AFA8D2; --blank-soft: #29273A;
+  --good: #7CC79A; --bad: #E78A7A;
+  --c0: #6DBDAF; --c1: #93C07F; --c2: #7FB2D6; --c3: #D291BD; --c4: #E3B55E; --c5: #E39482;
+  --shadow: 0 10px 40px rgba(0, 0, 0, .5);
+}
+
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  margin: 0;
+  color: var(--ink);
+  font: 15px/1.6 var(--sans);
+  padding-inline: 16px;
+  padding-block: 0 calc(84px + env(safe-area-inset-bottom, 0px));
+  -webkit-font-smoothing: antialiased;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--anchor); outline-offset: 2px; }
+.wrap { max-width: 680px; margin: 0 auto; }
+
+/* ---------- header ---------- */
+.top { padding-block: 22px 14px; display: grid; gap: 4px; }
+.brand { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.brand-name { font: 900 15px/1 var(--serif); letter-spacing: .12em; color: var(--anchor); }
+.brand-sub { font: 400 12px/1 var(--mono); color: var(--ink-3); letter-spacing: .04em; }
+.week-nav { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.week-title { font: 600 clamp(24px, 6.4vw, 32px)/1.2 var(--serif); margin: 0; flex: 1; text-wrap: balance; }
+.icon-btn {
+  width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); display: grid; place-items: center; flex: none;
+}
+.icon-btn:hover { border-color: var(--ink-3); }
+.pill-btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: 6px 14px; font-size: 13px; color: var(--ink-2);
+}
+.week-meta { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-2); font-size: 13px; }
+.week-meta b { font: 500 13px var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* ---------- banners ---------- */
+.banner {
+  display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  padding: 12px 14px; border-radius: 12px; margin-bottom: 12px; font-size: 14px;
+}
+.banner.sample { background: var(--blank-soft); color: var(--ink); }
+.banner.plan { background: var(--flex-soft); }
+.banner .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.banner button {
+  border: 0; border-radius: 999px; padding: 6px 14px; font-size: 13px; font-weight: 500;
+  background: var(--surface); color: var(--ink);
+}
+
+/* ---------- week ---------- */
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin: 2px 0 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+.sw.anchor { background: var(--anchor); }
+.sw.flex { background: var(--flex-soft); border: 1.5px solid var(--flex); }
+.sw.blank { border: 1.5px dashed var(--blank); }
+
+.days { display: grid; gap: 0; border-top: 1px solid var(--line); }
+.day {
+  display: grid; grid-template-columns: 64px 1fr; gap: 12px;
+  padding-block: 14px; border-bottom: 1px solid var(--line); align-items: start;
+}
+.day.today { background: linear-gradient(90deg, var(--anchor-soft), transparent 70%); margin-inline: -16px; padding-inline: 16px; }
+.day-label { display: grid; gap: 0; padding-top: 3px; }
+.day-name { font: 600 16px/1.2 var(--serif); }
+.day-date { font: 400 12px/1.4 var(--mono); color: var(--ink-3); }
+.day.today .day-name { color: var(--anchor); }
+.day.today .day-date::after { content: "今天"; display: block; font: 500 11px/1.4 var(--sans); color: var(--anchor); letter-spacing: .08em; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  border-radius: 10px; padding: 7px 12px; font-size: 14px; line-height: 1.35; text-align: left;
+  border: 1.5px solid transparent;
+}
+.chip-name { overflow-wrap: anywhere; }
+.chip.k-anchor { background: var(--anchor); color: var(--on-anchor); }
+.chip.k-flex { background: var(--flex-soft); border-color: var(--flex); color: var(--ink); }
+.chip.k-flex.empty { background: transparent; border-style: dashed; color: var(--flex); }
+.chip.k-blank { background: transparent; border: 1.5px dashed var(--blank); color: var(--blank); }
+.chip-score {
+  font: 500 12px/1 var(--mono); border-radius: 999px; padding: 3px 7px;
+  background: var(--surface); color: var(--ink);
+}
+.chip.k-anchor .chip-score { background: var(--on-anchor); color: var(--anchor); }
+.chip.k-flex.empty::before { content: "+"; font-weight: 700; }
+.add-chip {
+  width: 34px; height: 34px; border-radius: 10px; border: 1.5px dashed var(--line);
+  background: transparent; color: var(--ink-3); font-size: 18px; line-height: 1;
+}
+.add-chip:hover { border-color: var(--ink-3); color: var(--ink); }
+
+/* ---------- sections ---------- */
+.section { margin-top: 26px; display: grid; gap: 10px; }
+.section h2 { font: 600 20px/1.3 var(--serif); margin: 0; }
+.section h3 { font: 500 12px/1.4 var(--sans); margin: 0; letter-spacing: .12em; color: var(--ink-2); }
+.lead { color: var(--ink-2); margin: 0; max-width: 60ch; font-size: 14px; }
+.card { background: var(--surface); border-radius: 14px; padding: 4px 16px; }
+
+.cat-head { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.row {
+  display: flex; align-items: center; gap: 12px; padding-block: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.row:last-child { border-bottom: 0; }
+.row-main { flex: 1; min-width: 0; }
+.row-title { overflow-wrap: anywhere; }
+.row-sub { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.row-sub .mono { font-family: var(--mono); }
+.ghost {
+  border: 1px solid var(--line); background: transparent; border-radius: 999px;
+  padding: 5px 12px; font-size: 13px; color: var(--ink-2); flex: none;
+}
+.ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+.ghost.armed { border-color: var(--bad); color: var(--bad); }
+.ghost.go { border-color: var(--anchor); color: var(--anchor); }
+
+.add-form { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+@media (max-width: 460px) { .add-form { grid-template-columns: 1fr 1fr; } .add-form input { grid-column: 1 / -1; } }
+.field {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 10px;
+  padding: 9px 12px; min-width: 0; width: 100%;
+}
+.primary {
+  border: 0; background: var(--anchor); color: var(--on-anchor); border-radius: 10px;
+  padding: 9px 18px; font-weight: 500;
+}
+.danger-link { border: 0; background: transparent; color: var(--bad); padding: 9px 4px; font-size: 14px; }
+
+/* ---------- review ---------- */
+.stat-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat { background: var(--surface); border-radius: 12px; padding: 12px 14px; }
+.stat b { display: block; font: 500 26px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--ink-2); }
+.progress { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.progress i { display: block; height: 100%; background: var(--anchor); border-radius: 3px; }
+.pips { display: inline-flex; gap: 3px; vertical-align: middle; }
+.pips i { width: 14px; height: 6px; border-radius: 2px; background: var(--surface-2); }
+.pips i.on { background: var(--ink-2); }
+.pips.hi i.on { background: var(--good); }
+.pips.lo i.on { background: var(--bad); }
+.avg { font: 500 18px/1 var(--mono); font-variant-numeric: tabular-nums; width: 2.4em; text-align: right; flex: none; }
+.verdict { font-size: 12px; border-radius: 999px; padding: 2px 9px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; }
+.verdict.hi { background: color-mix(in srgb, var(--good) 16%, transparent); color: var(--good); }
+.verdict.lo { background: color-mix(in srgb, var(--bad) 14%, transparent); color: var(--bad); }
+.quote { padding-block: 12px; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
+.quote:last-child { border-bottom: 0; }
+.quote p { margin: 0; font-family: var(--serif); font-weight: 600; }
+.quote .row-sub { display: flex; gap: 8px; flex-wrap: wrap; }
+.empty-state { color: var(--ink-3); padding-block: 18px; font-size: 14px; }
+
+/* ---------- tabbar ---------- */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 10;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--line);
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+}
+.tabbar-in { max-width: 680px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.tab {
+  border: 0; background: transparent; padding: 8px 4px; border-radius: 10px;
+  display: grid; justify-items: center; gap: 3px; color: var(--ink-3); font-size: 12px;
+}
+.tab svg { width: 22px; height: 22px; }
+.tab[aria-current="page"] { color: var(--anchor); background: var(--anchor-soft); }
+
+/* ---------- sheet ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(10, 20, 18, .42); z-index: 20; display: grid; align-items: end; justify-items: center; }
+.sheet {
+  width: 100%; max-width: 560px; max-height: 88vh; overflow: auto;
+  background: var(--surface); border-radius: 20px 20px 0 0; box-shadow: var(--shadow);
+  padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 18px; animation: up .22s ease-out;
+}
+@keyframes up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet { animation: none; } }
+.grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line); justify-self: center; }
+.sheet-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.sheet-head h2 { font: 600 20px/1.3 var(--serif); margin: 0; }
+.sheet-head .row-sub { font-family: var(--mono); }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface-2); border-radius: 12px; padding: 3px; gap: 3px; }
+.seg button { border: 0; background: transparent; border-radius: 9px; padding: 8px 4px; font-size: 14px; color: var(--ink-2); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.seg-hint { font-size: 12px; color: var(--ink-3); margin: -10px 0 0; }
+.block { display: grid; gap: 10px; }
+.label { font-size: 13px; color: var(--ink-2); }
+.current-act { font: 600 19px/1.4 var(--serif); }
+.current-act.none { color: var(--ink-3); font-family: var(--sans); font-weight: 400; font-size: 15px; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.picker { display: grid; gap: 4px; max-height: 42vh; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 6px 10px; }
+.picker .cat-head { margin: 8px 0 2px; font-size: 12px; color: var(--ink-2); letter-spacing: .08em; }
+.pick {
+  border: 0; background: transparent; text-align: left; padding: 8px 10px; border-radius: 8px;
+  display: flex; gap: 8px; justify-content: space-between; align-items: center;
+}
+.pick:hover { background: var(--surface-2); }
+.pick[aria-pressed="true"] { background: var(--anchor-soft); color: var(--anchor); font-weight: 500; }
+.pick small { font: 400 11px var(--mono); color: var(--ink-3); white-space: nowrap; }
+.scores { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.score {
+  border: 1.5px solid var(--line); background: transparent; border-radius: 12px; padding: 10px 0 6px;
+  display: grid; justify-items: center; gap: 0;
+}
+.score b { font: 500 20px/1 var(--mono); }
+.score span { font-size: 11px; color: var(--ink-3); min-height: 1.4em; }
+.score[aria-pressed="true"] { border-color: var(--anchor); background: var(--anchor); color: var(--on-anchor); }
+.score[aria-pressed="true"] span { color: var(--on-anchor); }
+.sheet-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.day-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.day-grid button { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 10px 0; font-family: var(--serif); font-weight: 600; }
+.day-grid button:hover { border-color: var(--anchor); color: var(--anchor); }
+
+textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(92px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 999px; font-size: 14px; z-index: 30;
+  max-width: calc(100vw - 32px); text-align: center;
+}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<nav class="tabbar" aria-label="主导航">
+  <div class="tabbar-in">
+    <button class="tab" data-tab="week">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>本周</button>
+    <button class="tab" data-tab="menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1" fill="currentColor"/><circle cx="4" cy="12" r="1" fill="currentColor"/><circle cx="4" cy="18" r="1" fill="currentColor"/></svg>菜单</button>
+    <button class="tab" data-tab="review">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>回顾</button>
+    <button class="tab" data-tab="rhythm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="7" r="3"/><path d="M12 10v11M6 15c0 3 3 6 6 6s6-3 6-6"/></svg>节奏</button>
+  </div>
+</nav>
+<div id="sheet"></div>
+<div id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ================= constants ================= */
+  const STORE_KEY = "anchor-blank-v1";
+  const DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  const KINDS = { anchor: "锚点", flex: "弹性", blank: "留白" };
+  const KIND_HINT = {
+    anchor: "每周固定在这天做，给生活一个节奏感。锚点不宜多。",
+    flex: "从菜单里按心情和天气挑一个。",
+    blank: "什么都不安排。留白也可以打分：空着的这晚感觉如何？",
+  };
+  const CATS = [
+    { id: "rhythm", name: "日常节奏", color: "var(--c0)" },
+    { id: "senses", name: "滋养感官", color: "var(--c1)" },
+    { id: "city", name: "探索城市", color: "var(--c2)" },
+    { id: "create", name: "创造与输出", color: "var(--c3)" },
+    { id: "joy", name: "纯粹快乐", color: "var(--c4)" },
+    { id: "connect", name: "连接", color: "var(--c5)" },
+  ];
+  const SCORE_WORDS = ["", "没感觉", "还行", "不错", "开心", "超开心"];
+  const DEFAULT_ACTS = [
+    ["gym", "健身", "rhythm"],
+    ["movie", "Movie Night", "rhythm"],
+    ["brunch", "慢早餐 + 5 分钟规划下周", "rhythm"],
+    ["market", "逛 Jean-Talon 市场，买一样没吃过的", "senses"],
+    ["bath", "泡澡 / 护肤夜，配一杯热饮", "senses"],
+    ["cafe", "探一家新咖啡馆，全程法语点单", "city"],
+    ["royal", "走一条没走过的路上 Mont-Royal", "city"],
+    ["books", "独立书店或图书馆分馆随便翻翻", "city"],
+    ["digest", "读书消化日：整理笔记，写一段想法", "create"],
+    ["trip", "云旅行规划夜（香港 / 苏州）", "create"],
+    ["translate", "翻译一小段喜欢的作品", "create"],
+    ["otome", "乙女游戏夜 + 一杯奶茶", "joy"],
+    ["theme", "主题电影夜（宫崎骏月 / 法语电影月）", "joy"],
+    ["meet", "约一个人吃饭或散步", "connect"],
+    ["call", "给远方的家人朋友打一通不赶时间的电话", "connect"],
+  ];
+  const DEFAULT_TEMPLATE = [
+    [{ kind: "blank" }],
+    [{ kind: "anchor", act: "gym" }],
+    [{ kind: "flex" }],
+    [{ kind: "anchor", act: "gym" }],
+    [{ kind: "anchor", act: "movie" }],
+    [{ kind: "flex" }],
+    [{ kind: "anchor", act: "brunch" }],
+  ];
+
+  /* ================= dates ================= */
+  const pad = (n) => String(n).padStart(2, "0");
+  const keyOf = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const parseKey = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
+  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  const mondayOf = (d) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+  const todayKey = () => keyOf(new Date());
+  const thisWeekKey = () => keyOf(mondayOf(new Date()));
+  const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+  const weeksBetween = (a, b) => Math.round((parseKey(b) - parseKey(a)) / (7 * 864e5));
+
+  /* ================= utils ================= */
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const avgOf = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
+
+  /* ================= state ================= */
+  let state = load();
+  let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "" };
+  const hashTab = (location.hash || "").slice(1);
+  if (["week", "menu", "review", "rhythm"].includes(hashTab)) ui.tab = hashTab;
+
+  function freshState() {
+    return {
+      v: 1,
+      acts: DEFAULT_ACTS.map(([id, name, cat]) => ({ id, name, cat, hidden: false })),
+      template: clone(DEFAULT_TEMPLATE),
+      weeks: {},
+      sampleWeeks: [],
+    };
+  }
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && s.acts && s.template && s.weeks) return s;
+      }
+    } catch (e) { /* storage unavailable */ }
+    const s = freshState();
+    seedSample(s);
+    return s;
+  }
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+
+  function fromTemplate(tpl) {
+    return tpl.map((day) => day.map((t) => ({ id: uid(), kind: t.kind, act: t.act || null, score: null, note: "" })));
+  }
+  function ensureWeek(k) {
+    if (!state.weeks[k]) { state.weeks[k] = { days: fromTemplate(state.template) }; save(); }
+    return state.weeks[k];
+  }
+  const actById = (id) => state.acts.find((a) => a.id === id);
+  const catById = (id) => CATS.find((c) => c.id === id) || CATS[0];
+  function entryLabel(e) {
+    if (e.kind === "blank") return "留白";
+    if (!e.act) return e.kind === "flex" ? "挑一个" : "锚点";
+    return actById(e.act)?.name ?? "（已删除）";
+  }
+
+  function seedSample(s) {
+    const mon = mondayOf(new Date());
+    const plans = [
+      { off: -2, picks: { 2: "cafe", 5: "royal" }, scores: [
+        [3, "不太习惯空着，但睡得很早"], [4, "出了汗，整个人轻了"], [4, "学到一句 « pantoute »"],
+        [3, "有点累，还是去了"], [5, "又看了一遍《千与千寻》"], [4, "秋天的山真好看"], [5, "阳光和可颂，完美"]] },
+      { off: -1, picks: { 2: "bath", 5: "meet" }, scores: [
+        [4, "什么都不做，反而很放松"], [4, "深蹲加了重量"], [2, "有点无聊，一直在刷手机"],
+        [4, ""], [5, "决定这个月只看宫崎骏"], [5, "和朋友聊了三个小时"], [4, "第一次做班尼迪克蛋"]] },
+    ];
+    s.sampleWeeks = [];
+    for (const p of plans) {
+      const k = keyOf(addDays(mon, p.off * 7));
+      const days = fromTemplate(s.template);
+      days.forEach((d, i) => {
+        const e = d[0];
+        if (p.picks[i]) e.act = p.picks[i];
+        [e.score, e.note] = p.scores[i];
+      });
+      s.weeks[k] = { days };
+      s.sampleWeeks.push(k);
+    }
+  }
+
+  /* ================= stats ================= */
+  function collect() {
+    const map = new Map();
+    const notes = [];
+    const scoredWeeks = new Set();
+    let total = 0;
+    for (const [wk, w] of Object.entries(state.weeks)) {
+      const mon = parseKey(wk);
+      w.days.forEach((day, i) => day.forEach((e) => {
+        if (!e.score) return;
+        const key = e.kind === "blank" ? "__blank" : e.act;
+        if (!key) return;
+        const date = addDays(mon, i);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(e.score);
+        scoredWeeks.add(wk);
+        total++;
+        if (e.note) notes.push({ date, text: e.note, score: e.score, name: entryLabel(e) });
+      }));
+    }
+    notes.sort((a, b) => b.date - a.date);
+    return { map, notes, weeks: scoredWeeks.size, total };
+  }
+  function actStats(map, id) {
+    const arr = map.get(id) || [];
+    return { n: arr.length, avg: avgOf(arr) };
+  }
+  function verdictOf(n, avg) {
+    if (n < 2) return { cls: "", text: "再试试" };
+    if (avg >= 4) return { cls: "hi", text: "留下" };
+    if (avg <= 2.5) return { cls: "lo", text: "可以删掉" };
+    return { cls: "", text: "看情况" };
+  }
+  const isTemplateAnchor = (id) => state.template.some((d) => d.some((t) => t.kind === "anchor" && t.act === id));
+
+  /* ================= render ================= */
+  const $app = document.getElementById("app");
+  const $sheet = document.getElementById("sheet");
+  const $toast = document.getElementById("toast");
+
+  function render() {
+    document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === ui.tab ? "page" : "false"));
+    $app.innerHTML = ({ week: viewWeek, menu: viewMenu, review: viewReview, rhythm: viewRhythm })[ui.tab]();
+    renderSheet();
+  }
+
+  function header(title, sub) {
+    return `<header class="top">
+      <div class="brand"><span class="brand-name">锚点与留白</span><span class="brand-sub">${esc(sub || "")}</span></div>
+      ${title}
+    </header>`;
+  }
+
+  function viewWeek() {
+    const k = ui.week;
+    const w = ensureWeek(k);
+    const mon = parseKey(k);
+    const sun = addDays(mon, 6);
+    const isNow = k === thisWeekKey();
+    const started = Object.keys(state.weeks).filter((wk) => state.weeks[wk].days.some((d) => d.some((e) => e.score)));
+    const first = [...started, thisWeekKey()].sort()[0];
+    const nth = weeksBetween(first, k) + 1;
+    const all = w.days.flat();
+    const rated = all.filter((e) => e.score);
+    const unpicked = [];
+    w.days.forEach((d, i) => d.forEach((e, j) => { if (e.kind === "flex" && !e.act) unpicked.push([i, j]); }));
+    const tk = todayKey();
+    const label = `${mon.getMonth() + 1}月${mon.getDate()}日 – ${sun.getMonth() !== mon.getMonth() ? (sun.getMonth() + 1) + "月" : ""}${sun.getDate()}日`;
+
+    let html = header(`
+      <div class="week-nav">
+        <h1 class="week-title">${label}</h1>
+        ${isNow ? "" : `<button class="pill-btn" data-act="week-now">回到本周</button>`}
+        <button class="icon-btn" data-act="week-prev" aria-label="上一周">‹</button>
+        <button class="icon-btn" data-act="week-next" aria-label="下一周">›</button>
+      </div>
+      <div class="week-meta">
+        <span>已打分 <b>${rated.length}/${all.length}</b></span>
+        <span>本周均分 <b>${rated.length ? avgOf(rated.map((e) => e.score)).toFixed(1) : "–"}</b></span>
+      </div>`, nth >= 1 ? `记录第 ${nth} 周` : "");
+
+    if (state.sampleWeeks.length) {
+      html += `<div class="banner sample"><span>前两周是<b>示例记录</b>，让你先看看「回顾」长什么样。</span>
+        <div class="actions"><button data-act="clear-sample">清除示例，开始我的记录</button></div></div>`;
+    }
+    if (unpicked.length) {
+      html += `<div class="banner plan"><span>还有 <b>${unpicked.length}</b> 个弹性时段没挑 · 花 5 分钟规划一下</span>
+        <div class="actions"><button data-act="open-entry" data-day="${unpicked[0][0]}" data-idx="${unpicked[0][1]}">开始挑</button></div></div>`;
+    } else if (isNow && new Date().getDay() === 0) {
+      html += `<div class="banner plan"><span>周日啦，给下周挑挑弹性活动吧</span>
+        <div class="actions"><button data-act="week-next">规划下周 →</button></div></div>`;
+    }
+
+    html += `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div>`;
+    html += `<div class="days">`;
+    w.days.forEach((d, i) => {
+      const date = addDays(mon, i);
+      html += `<div class="day ${keyOf(date) === tk ? "today" : ""}">
+        <div class="day-label"><span class="day-name">${DAYS[i]}</span><span class="day-date">${md(date)}</span></div>
+        <div class="chips">
+          ${d.map((e, j) => chip(e, `data-act="open-entry" data-day="${i}" data-idx="${j}"`, true)).join("")}
+          <button class="add-chip" data-act="add-entry" data-day="${i}" aria-label="给${DAYS[i]}加一项">+</button>
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+    return html;
+  }
+
+  function chip(e, attrs, withScore) {
+    const empty = e.kind === "flex" && !e.act ? "empty" : "";
+    const sc = withScore && e.score ? `<span class="chip-score" aria-label="${e.score} 分">${e.score}</span>` : "";
+    return `<button class="chip k-${e.kind} ${empty}" ${attrs}><span class="chip-name">${esc(entryLabel(e))}</span>${sc}</button>`;
+  }
+
+  function viewMenu() {
+    const { map } = collect();
+    let html = header(`<h1 class="week-title">让我开心的事</h1>
+      <p class="lead">每周日花 5 分钟，根据心情和天气从这里挑 1–2 个放进弹性时段。低分的删掉，不需要愧疚。</p>`, `${state.acts.filter((a) => !a.hidden).length} 项`);
+    for (const c of CATS) {
+      const items = state.acts.filter((a) => a.cat === c.id && !a.hidden);
+      html += `<section class="section"><div class="cat-head"><i class="dot" style="background:${c.color}"></i><h3>${c.name}</h3></div><div class="card">`;
+      if (!items.length) html += `<div class="empty-state">这一类还空着。</div>`;
+      for (const a of items) {
+        const s = actStats(map, a.id);
+        const armed = ui.armed === "hide:" + a.id;
+        html += `<div class="row"><div class="row-main"><div class="row-title">${esc(a.name)}</div>
+          <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}${isTemplateAnchor(a.id) ? " · 已是锚点" : ""}</div></div>
+          <button class="ghost ${armed ? "armed" : ""}" data-act="hide-act" data-id="${a.id}">${armed ? "确认删除" : "删除"}</button></div>`;
+      }
+      html += `</div></section>`;
+    }
+    html += `<section class="section"><h2>加一件新的事</h2>
+      <form class="add-form" id="add-form">
+        <input class="field" id="new-act-name" placeholder="比如：去植物园画速写" maxlength="60" required>
+        <select class="field" id="new-act-cat">${CATS.map((c) => `<option value="${c.id}" ${c.id === "joy" ? "selected" : ""}>${c.name}</option>`).join("")}</select>
+        <button class="primary" type="submit">添加</button>
+      </form></section>`;
+    const hidden = state.acts.filter((a) => a.hidden);
+    if (hidden.length) {
+      html += `<section class="section"><h3>已删除 · 可以找回</h3><div class="card">${hidden.map((a) => `
+        <div class="row"><div class="row-main"><div class="row-title">${esc(a.name)}</div></div>
+        <button class="ghost" data-act="restore-act" data-id="${a.id}">找回</button></div>`).join("")}</div></section>`;
+    }
+    return html;
+  }
+
+  function viewReview() {
+    const { map, notes, weeks, total } = collect();
+    const allScores = [...map.values()].flat();
+    const target = 4;
+    let html = header(`<h1 class="week-title">什么真正让我开心</h1>
+      <p class="lead">坚持 3–4 周后回头看：高分的留下或升级为锚点，低分的直接删掉。</p>`, "回顾");
+    html += `<div class="stat-strip">
+      <div class="stat"><b>${weeks}</b><span>记录的周数</span></div>
+      <div class="stat"><b>${total}</b><span>打分次数</span></div>
+      <div class="stat"><b>${allScores.length ? avgOf(allScores).toFixed(1) : "–"}</b><span>总体均分</span></div>
+    </div>`;
+    html += `<div class="section" style="margin-top:14px"><div class="progress" aria-label="回顾进度"><i style="width:${Math.min(100, (weeks / target) * 100)}%"></i></div>
+      <p class="lead">${weeks >= 3 ? "数据够了，可以认真筛一轮了。" : `再记录 ${3 - weeks} 周，结论会更可靠。现在的判断先当参考。`}</p></div>`;
+
+    const rows = [...map.keys()].map((id) => {
+      const s = actStats(map, id);
+      const a = id === "__blank" ? { id, name: "留白", cat: null } : (actById(id) || { id, name: "（已删除）", cat: null });
+      return { a, ...s };
+    }).sort((x, y) => y.avg - x.avg || y.n - x.n);
+
+    html += `<section class="section"><h2>按开心程度排序</h2><div class="card">`;
+    if (!rows.length) html += `<div class="empty-state">还没有打分。在「本周」里点开一项，做完之后打个分就行。</div>`;
+    for (const r of rows) {
+      const v = verdictOf(r.n, r.avg);
+      const color = r.a.cat ? catById(r.a.cat).color : "var(--blank)";
+      const rounded = Math.round(r.avg);
+      let action = "";
+      if (r.a.id !== "__blank" && actById(r.a.id)) {
+        if (v.cls === "hi" && !isTemplateAnchor(r.a.id)) action = `<button class="ghost go" data-act="promote" data-id="${r.a.id}">设为锚点</button>`;
+        else if (v.cls === "lo" && !actById(r.a.id).hidden) {
+          const armed = ui.armed === "hide:" + r.a.id;
+          action = `<button class="ghost ${armed ? "armed" : ""}" data-act="hide-act" data-id="${r.a.id}">${armed ? "确认删除" : "删掉"}</button>`;
+        }
+      }
+      html += `<div class="row">
+        <span class="avg">${r.avg.toFixed(1)}</span>
+        <div class="row-main">
+          <div class="row-title"><i class="dot" style="background:${color};margin-right:6px"></i>${esc(r.a.name)}</div>
+          <div class="row-sub"><span class="pips ${v.cls}">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= rounded ? "on" : ""}"></i>`).join("")}</span>
+            &nbsp;<span class="mono">${r.n}</span> 次 &nbsp;<span class="verdict ${v.cls}">${v.text}</span></div>
+        </div>${action}</div>`;
+    }
+    html += `</div></section>`;
+
+    html += `<section class="section"><h2>我说过的「为什么」</h2><div class="card">`;
+    if (!notes.length) html += `<div class="empty-state">打分时写一句话，之后会在这里看到。</div>`;
+    for (const n of notes.slice(0, 20)) {
+      html += `<div class="quote"><p>“${esc(n.text)}”</p><div class="row-sub"><span>${esc(n.name)}</span><span class="mono">${md(n.date)} · ${n.score} 分</span></div></div>`;
+    }
+    html += `</div></section>`;
+    return html;
+  }
+
+  function viewRhythm() {
+    let html = header(`<h1 class="week-title">我的一周节奏</h1>
+      <p class="lead">这是每一周的起点：固定锚点 2–3 个、弹性 1–2 个，至少留一个晚上什么都不安排。改动会用在之后新开始的每一周。</p>`, "模板");
+    const anchors = state.template.flat().filter((t) => t.kind === "anchor").length;
+    const blanks = state.template.flat().filter((t) => t.kind === "blank").length;
+    const warn = [];
+    if (anchors > 4) warn.push(`锚点有 ${anchors} 个，多了就变成任务清单了`);
+    if (!blanks) warn.push("还没有留白。没有留白的计划，很快就会让人觉得累");
+    if (warn.length) html += `<div class="banner plan"><span>${warn.join("；")}。</span></div>`;
+    html += `<div class="days">`;
+    state.template.forEach((d, i) => {
+      html += `<div class="day"><div class="day-label"><span class="day-name">${DAYS[i]}</span></div>
+        <div class="chips">${d.map((t, j) => chip({ kind: t.kind, act: t.act || null }, `data-act="open-tpl" data-day="${i}" data-idx="${j}"`, false)).join("")}
+        <button class="add-chip" data-act="add-tpl" data-day="${i}" aria-label="给${DAYS[i]}加一项">+</button></div></div>`;
+    });
+    html += `</div>`;
+    const armedApply = ui.armed === "apply-tpl";
+    html += `<section class="section"><div class="btn-row">
+      <button class="ghost ${armedApply ? "armed" : ""}" data-act="apply-tpl">${armedApply ? "确认：用模板重置本周" : "用模板重置本周（已打分的保留）"}</button></div></section>`;
+
+    html += `<section class="section"><h2>备份与恢复</h2>
+      <p class="lead">数据只存在这个浏览器里。换手机或清理浏览器前，先复制一份备份。</p>
+      <div class="btn-row"><button class="ghost" data-act="make-backup">生成备份</button>
+      ${ui.backup ? `<button class="ghost go" data-act="copy-backup">复制</button>` : ""}</div>
+      ${ui.backup ? `<textarea class="field" id="backup-out" readonly>${esc(ui.backup)}</textarea>` : ""}
+      <textarea class="field" id="backup-in" placeholder="把备份粘贴到这里"></textarea>
+      <div class="btn-row">
+        <button class="ghost ${ui.armed === "import" ? "armed" : ""}" data-act="import">${ui.armed === "import" ? "确认导入（会覆盖现在的数据）" : "从上面导入"}</button>
+        <label class="ghost" for="backup-file" style="cursor:pointer">从文件导入</label>
+        <input type="file" id="backup-file" accept="application/json,.json,.txt" hidden>
+      </div></section>`;
+    const armedReset = ui.armed === "reset";
+    html += `<section class="section"><div class="btn-row">
+      <button class="danger-link" data-act="reset">${armedReset ? "再点一次：清空一切，从头开始" : "清空全部数据"}</button></div></section>`;
+    return html;
+  }
+
+  /* ================= sheet ================= */
+  function openEntrySheet(mode, day, idx) {
+    const src = mode === "entry" ? ensureWeek(ui.week).days[day][idx] : state.template[day][idx];
+    ui.sheet = { mode, day, idx, picking: false, draft: { kind: src.kind, act: src.act || null, score: src.score ?? null, note: src.note || "" } };
+    if (src.kind === "flex" && !src.act) ui.sheet.picking = true;
+    ui.armed = null;
+    render();
+  }
+
+  function renderSheet() {
+    const s = ui.sheet;
+    if (!s) { $sheet.innerHTML = ""; return; }
+    if (s.mode === "promote") { $sheet.innerHTML = promoteSheet(s); return; }
+    const d = s.draft;
+    const isEntry = s.mode === "entry";
+    const date = isEntry ? addDays(parseKey(ui.week), s.day) : null;
+    const act = d.act ? actById(d.act) : null;
+    const { map } = collect();
+
+    let html = `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="编辑">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2>${DAYS[s.day]}${isEntry ? "" : " · 每周模板"}</h2>${date ? `<span class="row-sub">${md(date)}</span>` : ""}</div>
+      <div class="seg" role="group" aria-label="类型">${Object.entries(KINDS).map(([k, v]) => `<button data-act="kind" data-kind="${k}" aria-pressed="${d.kind === k}">${v}</button>`).join("")}</div>
+      <p class="seg-hint">${KIND_HINT[d.kind]}</p>`;
+
+    if (d.kind !== "blank") {
+      html += `<div class="block"><span class="label">做什么</span>
+        <div class="current-act ${act ? "" : "none"}">${act ? esc(act.name) : "还没选"}</div>
+        <div class="btn-row">
+          <button class="ghost" data-act="toggle-pick">${s.picking ? "收起菜单" : "从菜单挑"}</button>
+          <button class="ghost" data-act="random-pick">随机来一个</button>
+          ${d.act && !isEntry ? `<button class="ghost" data-act="clear-act">不指定</button>` : ""}
+        </div>`;
+      if (s.picking) {
+        const order = d.kind === "anchor" ? CATS : [...CATS.slice(1), CATS[0]];
+        html += `<div class="picker">`;
+        for (const c of order) {
+          const items = state.acts.filter((a) => a.cat === c.id && !a.hidden);
+          if (!items.length) continue;
+          html += `<div class="cat-head"><i class="dot" style="background:${c.color}"></i>${c.name}</div>`;
+          for (const a of items) {
+            const st = actStats(map, a.id);
+            html += `<button class="pick" data-act="pick" data-id="${a.id}" aria-pressed="${d.act === a.id}"><span>${esc(a.name)}</span>
+              <small>${st.n ? `${st.avg.toFixed(1)} 分 · ${st.n} 次` : "没试过"}</small></button>`;
+          }
+        }
+        html += `</div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (isEntry) {
+      html += `<div class="block"><span class="label">做完之后我有多开心？</span>
+        <div class="scores">${[1, 2, 3, 4, 5].map((n) => `<button class="score" data-act="score" data-n="${n}" aria-pressed="${d.score === n}"><b>${n}</b><span>${SCORE_WORDS[n]}</span></button>`).join("")}</div>
+        <input class="field" id="entry-note" placeholder="一句话：为什么？" maxlength="120" value="${esc(d.note)}">
+        ${d.score ? `<div><button class="ghost" data-act="clear-score">清除打分</button></div>` : ""}
+      </div>`;
+    }
+
+    const armed = ui.armed === "del-entry";
+    html += `<div class="sheet-foot">
+        <button class="danger-link" data-act="del-entry">${armed ? "再点一次确认删除" : "删除这一项"}</button>
+        <div class="btn-row"><button class="ghost" data-act="close-sheet-btn">取消</button><button class="primary" data-act="save-entry">保存</button></div>
+      </div></div></div>`;
+    $sheet.innerHTML = html;
+  }
+
+  function promoteSheet(s) {
+    const a = actById(s.id);
+    return `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="设为锚点">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2>把它变成锚点</h2></div>
+      <p class="lead">「${esc(a?.name)}」固定在每周哪一天？</p>
+      <div class="day-grid">${DAYS.map((n, i) => `<button data-act="promote-day" data-day="${i}">${n.slice(1)}</button>`).join("")}</div>
+      <div class="sheet-foot"><span></span><button class="ghost" data-act="close-sheet-btn">取消</button></div>
+    </div></div>`;
+  }
+
+  /* ================= actions ================= */
+  let toastTimer;
+  function toast(msg) {
+    $toast.innerHTML = `<div class="toast" role="status">${esc(msg)}</div>`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { $toast.innerHTML = ""; }, 2200);
+  }
+  function arm(token) {
+    if (ui.armed === token) { ui.armed = null; return true; }
+    ui.armed = token; render(); return false;
+  }
+  function randomAct(kind, current) {
+    const w = ensureWeek(ui.week).days.flat().map((e) => e.act);
+    let pool = state.acts.filter((a) => !a.hidden && a.id !== current && (kind === "anchor" || a.cat !== "rhythm"));
+    const fresh = pool.filter((a) => !w.includes(a.id));
+    if (fresh.length) pool = fresh;
+    return pool.length ? pool[Math.floor(Math.random() * pool.length)].id : current;
+  }
+
+  const actions = {
+    "week-prev": () => { ui.week = keyOf(addDays(parseKey(ui.week), -7)); },
+    "week-next": () => { ui.week = keyOf(addDays(parseKey(ui.week), 7)); },
+    "week-now": () => { ui.week = thisWeekKey(); },
+    "clear-sample": () => {
+      state.sampleWeeks.forEach((k) => delete state.weeks[k]);
+      state.sampleWeeks = [];
+      save(); toast("示例已清除，从这周开始记录吧");
+    },
+    "open-entry": (el) => { openEntrySheet("entry", +el.dataset.day, +el.dataset.idx); return false; },
+    "add-entry": (el) => {
+      const d = ensureWeek(ui.week).days[+el.dataset.day];
+      d.push({ id: uid(), kind: "flex", act: null, score: null, note: "" });
+      save();
+      openEntrySheet("entry", +el.dataset.day, d.length - 1);
+      ui.sheet.isNew = true;
+      renderSheet();
+      return false;
+    },
+    "open-tpl": (el) => { openEntrySheet("tpl", +el.dataset.day, +el.dataset.idx); return false; },
+    "add-tpl": (el) => {
+      const d = state.template[+el.dataset.day];
+      d.push({ kind: "flex" });
+      save();
+      openEntrySheet("tpl", +el.dataset.day, d.length - 1);
+      ui.sheet.isNew = true;
+      renderSheet();
+      return false;
+    },
+    "close-sheet": (el, ev) => { if (ev.target !== el) return false; closeSheet(); },
+    "close-sheet-btn": () => closeSheet(),
+    kind: (el) => { ui.sheet.draft.kind = el.dataset.kind; if (el.dataset.kind === "blank") ui.sheet.picking = false; renderSheet(); return false; },
+    "toggle-pick": () => { ui.sheet.picking = !ui.sheet.picking; renderSheet(); return false; },
+    "random-pick": () => { ui.sheet.draft.act = randomAct(ui.sheet.draft.kind, ui.sheet.draft.act); ui.sheet.picking = false; renderSheet(); return false; },
+    "clear-act": () => { ui.sheet.draft.act = null; renderSheet(); return false; },
+    pick: (el) => { ui.sheet.draft.act = el.dataset.id; ui.sheet.picking = false; renderSheet(); return false; },
+    score: (el) => { ui.sheet.draft.score = +el.dataset.n; renderSheet(); document.getElementById("entry-note")?.focus(); return false; },
+    "clear-score": () => { ui.sheet.draft.score = null; renderSheet(); return false; },
+    "save-entry": () => {
+      const s = ui.sheet, d = s.draft;
+      if (s.mode === "entry") {
+        const e = ensureWeek(ui.week).days[s.day][s.idx];
+        Object.assign(e, { kind: d.kind, act: d.kind === "blank" ? null : d.act, score: d.score, note: d.note.trim() });
+        if (d.score) toast(d.score >= 4 ? "记下了，这个值得留下" : "记下了");
+      } else {
+        const t = { kind: d.kind };
+        if (d.kind !== "blank" && d.act) t.act = d.act;
+        state.template[s.day][s.idx] = t;
+        toast("模板已更新，新的一周会用上");
+      }
+      save(); ui.sheet = null;
+    },
+    "del-entry": () => {
+      if (!arm("del-entry")) { renderSheet(); return false; }
+      const s = ui.sheet;
+      (s.mode === "entry" ? ensureWeek(ui.week).days[s.day] : state.template[s.day]).splice(s.idx, 1);
+      save(); ui.sheet = null;
+    },
+    "hide-act": (el) => {
+      if (!arm("hide:" + el.dataset.id)) return false;
+      const a = actById(el.dataset.id); a.hidden = true;
+      save(); toast(`已从菜单删掉「${a.name}」`);
+    },
+    "restore-act": (el) => { actById(el.dataset.id).hidden = false; save(); },
+    promote: (el) => { ui.sheet = { mode: "promote", id: el.dataset.id }; },
+    "promote-day": (el) => {
+      const day = +el.dataset.day, id = ui.sheet.id;
+      state.template[day].push({ kind: "anchor", act: id });
+      save(); ui.sheet = null;
+      toast(`已设为每${DAYS[day]}的锚点`);
+    },
+    "apply-tpl": () => {
+      if (!arm("apply-tpl")) return false;
+      const w = ensureWeek(thisWeekKey());
+      const fresh = fromTemplate(state.template);
+      w.days = w.days.map((d, i) => [...d.filter((e) => e.score), ...fresh[i]]);
+      save(); toast("本周已按模板重置");
+    },
+    "make-backup": () => { ui.backup = JSON.stringify(state); },
+    "copy-backup": () => {
+      const ta = document.getElementById("backup-out");
+      const fallback = () => { ta.focus(); ta.select(); toast("已选中，请手动复制"); };
+      if (navigator.clipboard?.writeText) navigator.clipboard.writeText(ui.backup).then(() => toast("已复制备份"), fallback);
+      else fallback();
+      return false;
+    },
+    import: () => {
+      const text = document.getElementById("backup-in").value.trim();
+      if (!text) { toast("先把备份粘贴到输入框里"); return false; }
+      if (!arm("import")) { document.getElementById("backup-in").value = text; return false; }
+      importText(text);
+    },
+    reset: () => {
+      if (!arm("reset")) return false;
+      state = freshState(); save(); ui.week = thisWeekKey(); ui.backup = ""; toast("已清空，从头开始");
+    },
+  };
+
+  function importText(text) {
+    try {
+      const s = JSON.parse(text);
+      if (!s || !Array.isArray(s.acts) || !Array.isArray(s.template) || typeof s.weeks !== "object") throw new Error();
+      s.sampleWeeks = s.sampleWeeks || [];
+      state = s; save(); ui.week = thisWeekKey(); toast("导入成功");
+    } catch (e) {
+      toast("导入失败：这不是有效的备份内容");
+    }
+    render();
+  }
+
+  function closeSheet() {
+    const s = ui.sheet;
+    if (s && s.isNew) {
+      // a newly added item that was never saved is discarded
+      const list = s.mode === "entry" ? ensureWeek(ui.week).days[s.day] : state.template[s.day];
+      list.splice(s.idx, 1); save();
+    }
+    ui.sheet = null; ui.armed = null;
+  }
+
+  document.addEventListener("click", (ev) => {
+    const tab = ev.target.closest(".tab");
+    if (tab) {
+      ui.tab = tab.dataset.tab; ui.armed = null;
+      try { history.replaceState(null, "", "#" + ui.tab); } catch (e) { /* ignore */ }
+      window.scrollTo(0, 0); render(); return;
+    }
+    const el = ev.target.closest("[data-act]");
+    if (!el) return;
+    const name = el.dataset.act;
+    const fn = actions[name];
+    if (!fn) return;
+    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset"].includes(name);
+    if (!keepArm) ui.armed = null;
+    const res = fn(el, ev);
+    if (res !== false) render();
+  });
+  document.addEventListener("input", (ev) => {
+    if (ev.target.id === "entry-note" && ui.sheet) ui.sheet.draft.note = ev.target.value;
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && ui.sheet) { closeSheet(); render(); }
+    if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions["save-entry"](); render(); }
+  });
+  document.addEventListener("submit", (ev) => {
+    if (ev.target.id !== "add-form") return;
+    ev.preventDefault();
+    const name = document.getElementById("new-act-name").value.trim();
+    const cat = document.getElementById("new-act-cat").value;
+    if (!name) return;
+    state.acts.push({ id: uid(), name, cat, hidden: false });
+    save(); toast(`已加入「${catById(cat).name}」`); render();
+  });
+  document.addEventListener("change", (ev) => {
+    if (ev.target.id !== "backup-file") return;
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => importText(String(r.result));
+    r.readAsText(f);
+  });
+
+  save();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -678,7 +678,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     };
     for (const c of CATS) {
       const items = state.acts.filter((a) => a.cat === c.id && !a.hidden);
-      html += `<section class="section"><div class="cat-head"><i class="dot" style="background:${c.color}"></i><h3>${c.name}</h3></div><div class="card">`;
+      html += `<section class="section"><div class="cat-head"><i class="dot" style="background:${c.color}"></i><h3>${c.name}</h3></div>
+        ${c.id === "rhythm" ? `<p class="lead">每周固定做的事，2–3 个刚刚好。在「本周」选锚点时，只会从标着「已是锚点」的事里挑。</p>` : ""}<div class="card">`;
       if (!items.length) html += `<div class="empty-state">这一类还空着。</div>`;
       // items promoted from another category can be turned back into plain menu items
       for (const a of items) html += row(a, a.anchor && a.cat !== "rhythm" ? `<button class="ghost" data-act="unanchor" data-id="${a.id}">取消锚点</button>` : "");

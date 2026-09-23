@@ -184,6 +184,7 @@ button { cursor: pointer; }
 }
 .row:last-child { border-bottom: 0; }
 .row-main { flex: 1; min-width: 0; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; max-width: 50%; }
 .row-title { overflow-wrap: anywhere; }
 .row-sub { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .row-sub .mono { font-family: var(--mono); }
@@ -386,7 +387,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     blank: "什么都不安排。留白也可以打分：空着的这晚感觉如何？",
   };
   const CATS = [
-    { id: "rhythm", name: "锚点", color: "var(--c0)" },
+    { id: "rhythm", name: "日常节奏", color: "var(--c0)" },
     { id: "senses", name: "滋养感官", color: "var(--c1)" },
     { id: "city", name: "探索城市", color: "var(--c2)" },
     { id: "create", name: "创造与输出", color: "var(--c3)" },
@@ -673,26 +674,23 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       const s = actStats(map, a.id);
       const armed = ui.armed === "hide:" + a.id;
       return `<div class="row"><div class="row-main"><div class="row-title">${esc(a.name)}</div>
-        <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}</div></div>
-        ${extra}<button class="ghost ${armed ? "armed" : ""}" data-act="hide-act" data-id="${a.id}">${armed ? "确认删除" : "删除"}</button></div>`;
+        <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}${a.anchor ? " · 已是锚点" : ""}</div></div>
+        <div class="row-actions">${extra}<button class="ghost ${armed ? "armed" : ""}" data-act="hide-act" data-id="${a.id}">${armed ? "确认删除" : "删除"}</button></div></div>`;
     };
-    const anchors = anchorActs();
-    html += `<section class="section"><div class="cat-head"><i class="dot" style="background:${CATS[0].color}"></i><h3>锚点</h3></div>
-      <p class="lead">每周固定做的事，2–3 个刚刚好。在「本周」选锚点时，只会从这里挑。</p><div class="card">`;
-    if (!anchors.length) html += `<div class="empty-state">还没有锚点。</div>`;
-    for (const a of anchors) html += row(a, a.cat !== "rhythm" ? `<button class="ghost" data-act="unanchor" data-id="${a.id}">移回菜单</button>` : "");
-    html += `</div></section>`;
-    for (const c of CATS.slice(1)) {
-      const items = menuActs().filter((a) => a.cat === c.id);
+    for (const c of CATS) {
+      const items = state.acts.filter((a) => a.cat === c.id && !a.hidden);
       html += `<section class="section"><div class="cat-head"><i class="dot" style="background:${c.color}"></i><h3>${c.name}</h3></div><div class="card">`;
       if (!items.length) html += `<div class="empty-state">这一类还空着。</div>`;
-      for (const a of items) html += row(a);
+      // items promoted from another category can be turned back into plain menu items
+      for (const a of items) html += row(a, a.anchor
+        ? `<button class="ghost" data-act="unanchor" data-id="${a.id}">取消锚点</button>`
+        : `<button class="ghost go" data-act="make-anchor" data-id="${a.id}">设为锚点</button>`);
       html += `</div></section>`;
     }
     html += `<section class="section"><h2>加一件新的事</h2>
       <form class="add-form" id="add-form">
         <input class="field" id="new-act-name" placeholder="比如：去植物园画速写" maxlength="60" required>
-        <select class="field" id="new-act-cat">${CATS.map((c) => `<option value="${c.id}" ${c.id === "joy" ? "selected" : ""}>${c.id === "rhythm" ? "锚点（每周固定）" : c.name}</option>`).join("")}</select>
+        <select class="field" id="new-act-cat">${CATS.map((c) => `<option value="${c.id}" ${c.id === "joy" ? "selected" : ""}>${c.name}</option>`).join("")}</select>
         <button class="primary" type="submit">添加</button>
       </form></section>`;
     const hidden = state.acts.filter((a) => a.hidden);
@@ -1090,9 +1088,13 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
             ? `<div class="new-anchor"><input class="field" id="new-anchor-name" maxlength="60" placeholder="比如：周三瑜伽" value="${esc(s.newAnchorName || "")}">
                 <button class="primary" data-act="create-anchor">添加</button></div>`
             : `<button class="pick add-pick" data-act="new-anchor"><span>+ 新建一个锚点</span></button>`;
+          html += `<button class="pick add-pick" data-act="toggle-from-menu"><span>${s.fromMenu ? "− 收起菜单" : "+ 从菜单里选一个"}</span></button>`;
+          if (s.fromMenu) {
+            html += `<p class="seg-hint" style="margin:0 0 4px">选中并保存后，它会成为锚点。</p>`;
+            for (const c of CATS) html += group(c, menuActs().filter((a) => a.cat === c.id));
+          }
         } else {
-          for (const c of CATS.slice(1)) html += group(c, menuActs().filter((a) => a.cat === c.id));
-          html += group(CATS[0], anchorActs());
+          for (const c of [...CATS.slice(1), CATS[0]]) html += group(c, state.acts.filter((a) => a.cat === c.id && !a.hidden));
         }
         html += `</div>`;
       }
@@ -1185,6 +1187,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       if (k !== "blank" && !s.draft.act) s.picking = true;
       renderSheet(); return false;
     },
+    "toggle-from-menu": () => { ui.sheet.fromMenu = !ui.sheet.fromMenu; renderSheet(); return false; },
     "new-anchor": () => { ui.sheet.newAnchor = true; ui.sheet.newAnchorName = ""; renderSheet(); document.getElementById("new-anchor-name")?.focus(); return false; },
     "create-anchor": () => {
       const name = (ui.sheet.newAnchorName || "").trim();
@@ -1195,15 +1198,18 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       ui.sheet.draft.act = a.id;
       toast("已新建锚点"); renderSheet(); return false;
     },
-    unanchor: (el) => { const a = actById(el.dataset.id); a.anchor = false; save(); toast(`「${a.name}」已移回菜单`); },
+    "make-anchor": (el) => { const a = actById(el.dataset.id); a.anchor = true; save(); toast(`「${a.name}」已设为锚点`); },
+    unanchor: (el) => { const a = actById(el.dataset.id); a.anchor = false; save(); toast(`「${a.name}」不再是锚点`); },
     "toggle-pick": () => { ui.sheet.picking = !ui.sheet.picking; renderSheet(); return false; },
     "random-pick": () => { ui.sheet.draft.act = randomAct(ui.sheet.draft.kind, ui.sheet.draft.act); ui.sheet.picking = false; renderSheet(); return false; },
     "clear-act": () => { ui.sheet.draft.act = null; renderSheet(); return false; },
-    pick: (el) => { ui.sheet.draft.act = el.dataset.id; ui.sheet.picking = false; renderSheet(); return false; },
+    pick: (el) => { ui.sheet.draft.act = el.dataset.id; ui.sheet.picking = false; ui.sheet.fromMenu = false; renderSheet(); return false; },
     score: (el) => { ui.sheet.draft.score = +el.dataset.n; renderSheet(); document.getElementById("entry-note")?.focus(); return false; },
     "clear-score": () => { ui.sheet.draft.score = null; renderSheet(); return false; },
     "save-entry": () => {
       const s = ui.sheet, d = s.draft;
+      const picked = d.act && actById(d.act);
+      if (d.kind === "anchor" && picked && !picked.anchor) { picked.anchor = true; toast(`「${picked.name}」已设为锚点`); }
       if (s.mode === "entry") {
         const e = ensureWeek(ui.week).days[s.day][s.idx];
         Object.assign(e, { kind: d.kind, act: d.kind === "blank" ? null : d.act, score: d.score, note: d.note.trim() });
@@ -1382,7 +1388,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const cat = document.getElementById("new-act-cat").value;
     if (!name) return;
     state.acts.push({ id: uid(), name, cat, hidden: false, anchor: cat === "rhythm" });
-    save(); toast(cat === "rhythm" ? "已加为锚点" : `已加入「${catById(cat).name}」`); render();
+    save(); toast(cat === "rhythm" ? "已加入「日常节奏」，也是一个锚点" : `已加入「${catById(cat).name}」`); render();
   });
   document.addEventListener("change", (ev) => {
     if (ev.target.id !== "backup-file") return;

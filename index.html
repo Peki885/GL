@@ -815,7 +815,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   function viewRhythm() {
     let html = header(`<h1 class="week-title">我的一周节奏</h1>
-      <p class="lead">这是每一周的起点：固定锚点 2–3 个、弹性 1–2 个，至少留一个晚上什么都不安排。改动会用在之后新开始的每一周。</p>`, "模板");
+      <p class="lead">有固定的期待，有随性的选择，也有空白的余地。你的节奏，由你来定。新的一周，都从这里开始。</p>`, "模板");
     const anchors = state.template.flat().filter((t) => t.kind === "anchor").length;
     const blanks = state.template.flat().filter((t) => t.kind === "blank").length;
     const warn = [];

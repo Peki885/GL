@@ -239,6 +239,9 @@ button { cursor: pointer; }
 .auth-form .primary { width: 100%; padding: 11px 18px; }
 .primary[disabled], .google-btn[disabled] { opacity: .55; cursor: default; }
 .error-line { color: var(--bad); font-size: 13px; margin: 0; }
+.phone-row { display: grid; grid-template-columns: minmax(0, 7.5em) 1fr; gap: 8px; }
+.auth-links { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.link-btn[disabled] { color: var(--ink-3); cursor: default; }
 .link-btn { border: 0; background: transparent; padding: 0; color: var(--anchor-ink); font-size: 13px; justify-self: start; }
 .kv { display: grid; gap: 2px; }
 .kv b { font-weight: 500; overflow-wrap: anywhere; }
@@ -353,6 +356,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 </nav>
 <div id="sheet"></div>
 <div id="toast"></div>
+<div id="recaptcha-box"></div>
 
 <script>
 (() => {
@@ -436,10 +440,22 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   /* ================= state ================= */
   let state = load();
   let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme(),
-    prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
+    prevTab: "week", authMethod: "phone", phoneCC: defaultCountryCode(), phoneNum: "", phoneCode: "", phoneSent: false, resendAt: 0, authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
   applyTheme(ui.theme);
   const hashTab = (location.hash || "").slice(1);
   if (["week", "menu", "review", "rhythm", "settings", "account"].includes(hashTab)) ui.tab = hashTab;
+
+  function defaultCountryCode() {
+    let tz = "", lang = "";
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ""; lang = (navigator.language || "").toLowerCase(); } catch (e) { /* ignore */ }
+    if (tz.startsWith("America/")) return "+1";
+    if (lang === "zh-tw") return "+886";
+    if (lang === "zh-hk") return "+852";
+    if (lang.startsWith("ja")) return "+81";
+    if (lang.startsWith("ko")) return "+82";
+    if (lang.startsWith("fr")) return "+33";
+    return "+86";
+  }
 
   function loadTheme() {
     try { const t = localStorage.getItem(THEME_KEY); if (t in THEMES) return t; } catch (e) { /* ignore */ }
@@ -768,7 +784,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     </header>`;
     html += `<section class="section"><button class="nav-row" data-act="open-account">
       <span class="nav-row-main"><span class="nav-row-title">账号与云端同步</span>
-      <span class="row-sub">${cloud.user ? esc(cloud.user.email || "已登录") : "未登录 · 记录只存在这个浏览器里"}</span></span>
+      <span class="row-sub">${cloud.user ? esc(cloud.user.phoneNumber || cloud.user.email || "已登录") : "未登录 · 记录只存在这个浏览器里"}</span></span>
       <span class="nav-row-chev" aria-hidden="true">›</span></button></section>`;
     html += `<section class="section"><h2>外观</h2>
       <div class="seg" role="group" aria-label="外观">${Object.entries(THEMES).map(([k, v]) => `<button data-act="theme" data-theme="${k}" aria-pressed="${ui.theme === k}">${v}</button>`).join("")}</div>
@@ -791,6 +807,47 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return html;
   }
 
+  const COUNTRY_CODES = [
+    ["+86", "中国大陆"], ["+852", "中国香港"], ["+853", "中国澳门"], ["+886", "中国台湾"],
+    ["+1", "美国 / 加拿大"], ["+81", "日本"], ["+82", "韩国"], ["+65", "新加坡"],
+    ["+44", "英国"], ["+33", "法国"], ["+49", "德国"], ["+61", "澳大利亚"], ["+64", "新西兰"],
+  ];
+
+  function phoneForm(busy) {
+    const wait = Math.max(0, Math.ceil((ui.resendAt - Date.now()) / 1000));
+    if (!ui.phoneSent) {
+      return `<form class="auth-form" id="phone-form" novalidate>
+        <div class="phone-row">
+          <select class="field" id="phone-cc" aria-label="国家或地区">${COUNTRY_CODES.map(([c, n]) => `<option value="${c}" ${c === ui.phoneCC ? "selected" : ""}>${c} ${n}</option>`).join("")}</select>
+          <input class="field" id="phone-num" type="tel" inputmode="tel" autocomplete="tel-national" placeholder="手机号" value="${esc(ui.phoneNum)}">
+        </div>
+        <button class="primary" type="submit" ${busy ? "disabled" : ""}>${ui.authBusy ? "正在发送…" : "获取验证码"}</button>
+      </form>`;
+    }
+    return `<form class="auth-form" id="phone-form" novalidate>
+        <p class="lead">验证码已发送到 <b>${esc(ui.phoneCC + " " + ui.phoneNum)}</b></p>
+        <input class="field" id="phone-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 位验证码" value="${esc(ui.phoneCode)}">
+        <button class="primary" type="submit" ${busy ? "disabled" : ""}>${ui.authBusy ? "请稍候…" : "登录"}</button>
+      </form>
+      <div class="auth-links">
+        <button class="link-btn" data-act="phone-change">换个号码</button>
+        <button class="link-btn" id="resend-btn" data-act="phone-resend" ${wait ? "disabled" : ""}>${wait ? `${wait} 秒后可重新发送` : "重新发送验证码"}</button>
+      </div>`;
+  }
+
+  function emailForm(busy) {
+    const reg = ui.authMode === "register";
+    return `<form class="auth-form" id="auth-form" novalidate>
+        <input class="field" id="auth-email" type="email" autocomplete="email" placeholder="邮箱" value="${esc(ui.authEmail)}" required>
+        <input class="field" id="auth-pass" type="password" autocomplete="${reg ? "new-password" : "current-password"}" placeholder="${reg ? "设置密码（至少 6 位）" : "密码"}" value="${esc(ui.authPass)}" required>
+        <button class="primary" type="submit" ${busy ? "disabled" : ""}>${ui.authBusy ? "请稍候…" : reg ? "注册并登录" : "登录"}</button>
+      </form>
+      <div class="auth-links">
+        <button class="link-btn" data-act="auth-mode" data-mode="${reg ? "login" : "register"}">${reg ? "已有账号？直接登录" : "还没有账号？注册一个"}</button>
+        ${!reg ? `<button class="link-btn" data-act="forgot-pass">忘记密码？</button>` : ""}
+      </div>`;
+  }
+
   function scoredCount(s) {
     let n = 0;
     Object.values(s.weeks || {}).forEach((w) => w.days.forEach((d) => d.forEach((e) => { if (e.score) n++; })));
@@ -811,29 +868,24 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
     if (!cloud.user) {
       const busy = ui.authBusy || !cloud.ready;
-      const reg = ui.authMode === "register";
+      const phone = ui.authMethod === "phone";
       html += `<div class="auth-card">
-        <button class="google-btn" data-act="google-login" ${busy ? "disabled" : ""}><span class="g">G</span>用 Google 账号登录</button>
-        <div class="divider">或者用邮箱</div>
-        <div class="seg" role="group" aria-label="登录或注册" style="grid-template-columns:1fr 1fr">
-          <button data-act="auth-mode" data-mode="login" aria-pressed="${!reg}">登录</button>
-          <button data-act="auth-mode" data-mode="register" aria-pressed="${reg}">注册新账号</button>
+        <div class="seg" role="group" aria-label="登录方式" style="grid-template-columns:1fr 1fr">
+          <button data-act="auth-method" data-method="phone" aria-pressed="${phone}">手机号</button>
+          <button data-act="auth-method" data-method="email" aria-pressed="${!phone}">邮箱</button>
         </div>
-        <form class="auth-form" id="auth-form" novalidate>
-          <input class="field" id="auth-email" type="email" autocomplete="email" placeholder="邮箱" value="${esc(ui.authEmail)}" required>
-          <input class="field" id="auth-pass" type="password" autocomplete="${reg ? "new-password" : "current-password"}" placeholder="${reg ? "设置密码（至少 6 位）" : "密码"}" value="${esc(ui.authPass)}" required>
-          <button class="primary" type="submit" ${busy ? "disabled" : ""}>${ui.authBusy ? "请稍候…" : reg ? "注册并登录" : "登录"}</button>
-        </form>
-        ${!reg ? `<button class="link-btn" data-act="forgot-pass">忘记密码？</button>` : ""}
+        ${phone ? phoneForm(busy) : emailForm(busy)}
         ${ui.authError ? `<p class="error-line" role="alert">${esc(ui.authError)}</p>` : ""}
+        <div class="divider">或者</div>
+        <button class="google-btn" data-act="google-login" ${busy ? "disabled" : ""}><span class="g">G</span>用 Google 账号登录</button>
       </div>
-      <p class="lead" style="margin-top:14px">不登录也可以继续用，记录只存在这个浏览器里。第一次登录时，这台设备上的记录会一起带上云端。</p>`;
+      <p class="lead" style="margin-top:14px">手机号登录不需要密码，每次用短信验证码即可。不登录也可以继续用，记录只存在这个浏览器里。第一次登录时，这台设备上的记录会一起带上云端。</p>`;
       return html;
     }
 
     const u = cloud.user;
     html += `<div class="auth-card">
-      <div class="kv"><span class="row-sub">登录账号</span><b>${esc(u.email || u.displayName || "已登录")}</b></div>
+      <div class="kv"><span class="row-sub">登录账号</span><b>${esc(u.phoneNumber || u.email || u.displayName || "已登录")}</b></div>
       <div class="kv"><span class="row-sub">云端同步</span><b>${syncBadge()}</b></div>
       ${cloud.errorText ? `<p class="error-line" role="alert">${esc(cloud.errorText)}</p>` : ""}
       <div class="btn-row"><button class="ghost go" data-act="sync-now">立即同步</button></div>
@@ -881,6 +933,15 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     "auth/popup-closed-by-user": "登录窗口被关掉了，再试一次吧",
     "auth/cancelled-popup-request": "登录窗口被关掉了，再试一次吧",
     "auth/unauthorized-domain": "这个网址还没加入 Firebase 的授权域名（Authentication → Settings → Authorized domains）",
+    "auth/invalid-phone-number": "手机号格式不对，检查一下区号和号码",
+    "auth/missing-phone-number": "先填一下手机号",
+    "auth/invalid-verification-code": "验证码不对，再看一眼短信",
+    "auth/missing-verification-code": "先填一下验证码",
+    "auth/code-expired": "验证码过期了，重新发送一个吧",
+    "auth/quota-exceeded": "今天发送的短信太多了，明天再试，或者先用邮箱登录",
+    "auth/captcha-check-failed": "人机验证没通过，刷新页面再试一次",
+    "auth/billing-not-enabled": "手机号登录需要 Firebase 开启付费计划（Blaze），暂时先用邮箱或 Google 登录吧",
+    "auth/invalid-app-credential": "人机验证没通过，刷新页面再试一次",
     "auth/operation-not-allowed": "这种登录方式还没在 Firebase 里开启（Authentication → Sign-in method）",
   };
   const authMessage = (e) => AUTH_ERRORS[e && e.code] || `出了点问题：${(e && (e.code || e.message)) || "未知错误"}`;
@@ -1188,6 +1249,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     },
     "open-account": () => { if (ui.tab !== "account") ui.prevTab = ui.tab; ui.authError = ""; goTab("account"); },
     "close-account": () => goTab(ui.prevTab || "week"),
+    "auth-method": (el) => { ui.authMethod = el.dataset.method; ui.authError = ""; },
+    "phone-change": () => { ui.phoneSent = false; ui.phoneCode = ""; ui.authError = ""; cloud.confirmation = null; },
+    "phone-resend": () => { if (Date.now() >= ui.resendAt) sendPhoneCode(); return false; },
     "auth-mode": (el) => { ui.authMode = el.dataset.mode; ui.authError = ""; },
     "google-login": () => {
       if (!cloud.ready) return false;
@@ -1264,6 +1328,50 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     window.scrollTo(0, 0);
   }
 
+  function resetVerifier() {
+    try { cloud.verifier && cloud.verifier.clear(); } catch (e) { /* ignore */ }
+    cloud.verifier = null;
+    document.getElementById("recaptcha-box").innerHTML = "";
+  }
+
+  async function sendPhoneCode() {
+    if (!cloud.ready || ui.authBusy) return;
+    const num = ui.phoneNum.replace(/[\s()-]/g, "").replace(/^0+/, "");
+    if (!/^\d{4,15}$/.test(num)) { ui.authError = num ? "手机号格式不对，只填数字就好" : "先填一下手机号"; render(); return; }
+    const { auth, RecaptchaVerifier, signInWithPhoneNumber } = cloud.fb;
+    ui.authBusy = true; ui.authError = ""; render();
+    try {
+      if (!cloud.verifier) cloud.verifier = new RecaptchaVerifier(auth, "recaptcha-box", { size: "invisible" });
+      cloud.confirmation = await signInWithPhoneNumber(auth, ui.phoneCC + num, cloud.verifier);
+      ui.phoneSent = true; ui.phoneCode = ""; ui.resendAt = Date.now() + 60000;
+      toast("验证码已发送");
+    } catch (e) {
+      resetVerifier();
+      ui.authError = authMessage(e);
+    }
+    ui.authBusy = false; render();
+    if (ui.phoneSent) document.getElementById("phone-code")?.focus();
+  }
+
+  function confirmPhoneCode() {
+    if (!cloud.confirmation || ui.authBusy) return;
+    const code = ui.phoneCode.replace(/\D/g, "");
+    if (code.length !== 6) { ui.authError = "验证码是 6 位数字"; render(); return; }
+    ui.authBusy = true; ui.authError = ""; render();
+    cloud.confirmation.confirm(code).then(() => {
+      ui.phoneSent = false; ui.phoneCode = ""; cloud.confirmation = null; resetVerifier();
+      toast("登录成功");
+    }).catch((e) => { ui.authBusy = false; ui.authError = authMessage(e); render(); });
+  }
+
+  setInterval(() => {
+    const btn = document.getElementById("resend-btn");
+    if (!btn) return;
+    const wait = Math.max(0, Math.ceil((ui.resendAt - Date.now()) / 1000));
+    btn.disabled = wait > 0;
+    btn.textContent = wait ? `${wait} 秒后可重新发送` : "重新发送验证码";
+  }, 1000);
+
   function closeSheet() {
     const s = ui.sheet;
     if (s && s.isNew) {
@@ -1294,12 +1402,20 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     if (ev.target.id === "entry-note" && ui.sheet) ui.sheet.draft.note = ev.target.value;
     if (ev.target.id === "auth-email") ui.authEmail = ev.target.value;
     if (ev.target.id === "auth-pass") ui.authPass = ev.target.value;
+    if (ev.target.id === "phone-cc") ui.phoneCC = ev.target.value;
+    if (ev.target.id === "phone-num") ui.phoneNum = ev.target.value;
+    if (ev.target.id === "phone-code") ui.phoneCode = ev.target.value;
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && ui.sheet) { closeSheet(); render(); }
     if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions["save-entry"](); render(); }
   });
   document.addEventListener("submit", (ev) => {
+    if (ev.target.id === "phone-form") {
+      ev.preventDefault();
+      if (ui.phoneSent) confirmPhoneCode(); else sendPhoneCode();
+      return;
+    }
     if (ev.target.id === "auth-form") {
       ev.preventDefault();
       if (!cloud.ready || ui.authBusy) return;
@@ -1321,6 +1437,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     save(); toast(`已加入「${catById(cat).name}」`); render();
   });
   document.addEventListener("change", (ev) => {
+    if (ev.target.id === "phone-cc") { ui.phoneCC = ev.target.value; return; }
     if (ev.target.id !== "backup-file") return;
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;

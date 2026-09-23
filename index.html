@@ -668,8 +668,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   function viewMenu() {
     const { map } = collect();
-    let html = header(`<h1 class="week-title">让我开心的事</h1>
-      <p class="lead">每周日花 5 分钟，根据心情和天气从这里挑 1–2 个放进弹性时段。低分的删掉，不需要愧疚。</p>`, `${state.acts.filter((a) => !a.hidden).length} 项`);
+    let html = header(`<h1 class="week-title">我的生活菜单</h1>
+      <p class="lead">一份只属于你的生活清单，随心情挑一件。</p>`, `${state.acts.filter((a) => !a.hidden).length} 项`);
     const row = (a, extra = "") => {
       const s = actStats(map, a.id);
       const armed = ui.armed === "hide:" + a.id;
@@ -706,7 +706,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const { map, notes, weeks, total } = collect();
     const allScores = [...map.values()].flat();
     const target = 4;
-    let html = header(`<h1 class="week-title">什么真正让我开心</h1>
+    let html = header(`<h1 class="week-title">这是我想要的生活吗</h1>
       <p class="lead">坚持 3–4 周后回头看：高分的留下或升级为锚点，低分的直接删掉。</p>`, "回顾");
     html += `<div class="stat-strip">
       <div class="stat"><b>${weeks}</b><span>记录的周数</span></div>

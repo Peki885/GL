@@ -214,6 +214,37 @@ button { cursor: pointer; }
 .nav-row-chev { font-size: 22px; line-height: 1; color: var(--ink-3); }
 .back-btn { border: 0; background: transparent; padding: 4px 0; color: var(--anchor-ink); font-size: 15px; font-weight: 500; }
 
+/* ---------- account ---------- */
+.brand-right { display: flex; align-items: center; gap: 10px; }
+.acct {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface);
+  border-radius: 999px; padding: 4px 11px; font-size: 12px; color: var(--ink-2); line-height: 1.4;
+}
+.acct:hover { border-color: var(--anchor); }
+.sync-slot { display: inline-flex; align-items: center; gap: 6px; }
+.sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; display: inline-block; }
+.sync-dot.ok { background: var(--good); }
+.sync-dot.busy { background: var(--flex); }
+.sync-dot.err { background: var(--bad); }
+.auth-card { background: var(--surface); border-radius: 16px; padding: 18px 16px; display: grid; gap: 12px; }
+.google-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
+  border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 11px 16px; font-weight: 500;
+}
+.google-btn:hover { border-color: var(--anchor); }
+.google-btn .g { font: 700 16px/1 var(--sans); color: var(--c2); }
+.divider { display: flex; align-items: center; gap: 12px; color: var(--ink-3); font-size: 12px; }
+.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.auth-form { display: grid; gap: 10px; }
+.auth-form .primary { width: 100%; padding: 11px 18px; }
+.primary[disabled], .google-btn[disabled] { opacity: .55; cursor: default; }
+.error-line { color: var(--bad); font-size: 13px; margin: 0; }
+.link-btn { border: 0; background: transparent; padding: 0; color: var(--anchor-ink); font-size: 13px; justify-self: start; }
+.kv { display: grid; gap: 2px; }
+.kv b { font-weight: 500; overflow-wrap: anywhere; }
+.choice { display: grid; gap: 8px; }
+.choice .nav-row { padding: 12px 14px; }
+
 /* ---------- review ---------- */
 .stat-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stat { background: var(--surface); border-radius: 12px; padding: 12px 14px; }
@@ -331,6 +362,17 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   const STORE_KEY = "anchor-blank-v1";
   const THEME_KEY = "anchor-blank-theme";
   const THEMES = { auto: "跟随系统", light: "浅色", dark: "深色" };
+  const FIREBASE_VERSION = "12.18.0";
+  // These values identify the Firebase project; they are public by design.
+  // Access to each user's data is enforced by the Firestore security rules.
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyBLYcDURxKoVulwjm1Hya89w6ypoM5rwnY",
+    authDomain: "hand-6ee5e.firebaseapp.com",
+    projectId: "hand-6ee5e",
+    storageBucket: "hand-6ee5e.firebasestorage.app",
+    messagingSenderId: "363381244348",
+    appId: "1:363381244348:web:0460cce45fe853ae406bb9",
+  };
   const DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
   const KINDS = { anchor: "锚点", flex: "弹性", blank: "留白" };
   const KIND_HINT = {
@@ -393,10 +435,11 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   /* ================= state ================= */
   let state = load();
-  let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme() };
+  let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme(),
+    prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
   applyTheme(ui.theme);
   const hashTab = (location.hash || "").slice(1);
-  if (["week", "menu", "review", "rhythm", "settings"].includes(hashTab)) ui.tab = hashTab;
+  if (["week", "menu", "review", "rhythm", "settings", "account"].includes(hashTab)) ui.tab = hashTab;
 
   function loadTheme() {
     try { const t = localStorage.getItem(THEME_KEY); if (t in THEMES) return t; } catch (e) { /* ignore */ }
@@ -428,15 +471,18 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     seedSample(s);
     return s;
   }
-  function save() {
+  // touch = a real change by the person (bumps updatedAt and syncs to the cloud)
+  function save(touch = true) {
+    if (touch) state.updatedAt = Date.now();
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+    if (touch) cloud.schedulePush();
   }
 
   function fromTemplate(tpl) {
     return tpl.map((day) => day.map((t) => ({ id: uid(), kind: t.kind, act: t.act || null, score: null, note: "" })));
   }
   function ensureWeek(k) {
-    if (!state.weeks[k]) { state.weeks[k] = { days: fromTemplate(state.template) }; save(); }
+    if (!state.weeks[k]) { state.weeks[k] = { days: fromTemplate(state.template) }; save(false); }
     return state.weeks[k];
   }
   const actById = (id) => state.acts.find((a) => a.id === id);
@@ -512,14 +558,28 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   const $toast = document.getElementById("toast");
 
   function render() {
-    document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === (ui.tab === "settings" ? "rhythm" : ui.tab) ? "page" : "false"));
-    $app.innerHTML = ({ week: viewWeek, menu: viewMenu, review: viewReview, rhythm: viewRhythm, settings: viewSettings })[ui.tab]();
+    document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === navTab() ? "page" : "false"));
+    $app.innerHTML = ({ week: viewWeek, menu: viewMenu, review: viewReview, rhythm: viewRhythm, settings: viewSettings, account: viewAccount })[ui.tab]();
     renderSheet();
+  }
+
+  function navTab() {
+    if (ui.tab === "settings") return "rhythm";
+    if (ui.tab === "account") return ui.prevTab === "settings" ? "rhythm" : ui.prevTab;
+    return ui.tab;
+  }
+
+  function acctButton() {
+    return `<button class="acct" data-act="open-account">${cloud.user ? syncBadge() : "登录 · 云端同步"}</button>`;
+  }
+  function syncBadge() {
+    const [cls, text] = cloud.statusView();
+    return `<span class="sync-slot"><i class="sync-dot ${cls}"></i>${esc(text)}</span>`;
   }
 
   function header(title, sub) {
     return `<header class="top">
-      <div class="brand"><span class="brand-name">锚点与留白</span><span class="brand-sub">${esc(sub || "")}</span></div>
+      <div class="brand"><span class="brand-name">锚点与留白</span><span class="brand-right"><span class="brand-sub">${esc(sub || "")}</span>${acctButton()}</span></div>
       ${title}
     </header>`;
   }
@@ -552,6 +612,10 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <span>本周均分 <b>${rated.length ? avgOf(rated.map((e) => e.score)).toFixed(1) : "–"}</b></span>
       </div>`, nth >= 1 ? `记录第 ${nth} 周` : "");
 
+    if (cloud.conflict) {
+      html += `<div class="banner plan"><span>云端和这台设备上各有一份记录，选一份保留吧</span>
+        <div class="actions"><button data-act="open-account">去选择</button></div></div>`;
+    }
     if (state.sampleWeeks.length) {
       html += `<div class="banner sample"><span>前两周是<b>示例记录</b>，让你先看看「回顾」长什么样。</span>
         <div class="actions"><button data-act="clear-sample">清除示例，开始我的记录</button></div></div>`;
@@ -702,12 +766,16 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       <div class="brand"><button class="back-btn" data-act="close-settings">‹ 节奏</button><span class="brand-sub">设置</span></div>
       <h1 class="week-title">设置</h1>
     </header>`;
+    html += `<section class="section"><button class="nav-row" data-act="open-account">
+      <span class="nav-row-main"><span class="nav-row-title">账号与云端同步</span>
+      <span class="row-sub">${cloud.user ? esc(cloud.user.email || "已登录") : "未登录 · 记录只存在这个浏览器里"}</span></span>
+      <span class="nav-row-chev" aria-hidden="true">›</span></button></section>`;
     html += `<section class="section"><h2>外观</h2>
       <div class="seg" role="group" aria-label="外观">${Object.entries(THEMES).map(([k, v]) => `<button data-act="theme" data-theme="${k}" aria-pressed="${ui.theme === k}">${v}</button>`).join("")}</div>
       <p class="lead">「跟随系统」会随手机的深色 / 浅色设置自动切换。</p></section>`;
 
     html += `<section class="section"><h2>备份与恢复</h2>
-      <p class="lead">数据只存在这个浏览器里。换手机或清理浏览器前，先复制一份备份。</p>
+      <p class="lead">${cloud.user ? "已登录，记录会自动同步到云端。备份可以当作额外的保险。" : "数据只存在这个浏览器里。换手机或清理浏览器前，先复制一份备份，或者登录开启云端同步。"}</p>
       <div class="btn-row"><button class="ghost" data-act="make-backup">生成备份</button>
       ${ui.backup ? `<button class="ghost go" data-act="copy-backup">复制</button>` : ""}</div>
       ${ui.backup ? `<textarea class="field" id="backup-out" readonly>${esc(ui.backup)}</textarea>` : ""}
@@ -719,9 +787,224 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       </div></section>`;
     const armedReset = ui.armed === "reset";
     html += `<section class="section"><div class="btn-row">
-      <button class="danger-link" data-act="reset">${armedReset ? "再点一次：清空一切，从头开始" : "清空全部数据"}</button></div></section>`;
+      <button class="danger-link" data-act="reset">${armedReset ? (cloud.user ? "再点一次：清空一切（云端也会清空）" : "再点一次：清空一切，从头开始") : "清空全部数据"}</button></div></section>`;
     return html;
   }
+
+  function scoredCount(s) {
+    let n = 0;
+    Object.values(s.weeks || {}).forEach((w) => w.days.forEach((d) => d.forEach((e) => { if (e.score) n++; })));
+    return n;
+  }
+
+  function viewAccount() {
+    const backLabel = { week: "本周", menu: "菜单", review: "回顾", rhythm: "节奏", settings: "设置" }[ui.prevTab] || "返回";
+    let html = `<header class="top">
+      <div class="brand"><button class="back-btn" data-act="close-account">‹ ${backLabel}</button><span class="brand-sub">账号</span></div>
+      <h1 class="week-title">${cloud.user ? "我的账号" : "登录，让记录跟着你走"}</h1>
+      ${cloud.user ? "" : `<p class="lead">登录后，记录会自动保存到云端。换手机、换电脑，登录同一个账号就能接着用。</p>`}
+    </header>`;
+
+    if (cloud.failed) {
+      html += `<div class="banner plan"><span>暂时连不上云端服务，请检查网络后刷新页面。不登录也可以照常使用。</span></div>`;
+    }
+
+    if (!cloud.user) {
+      const busy = ui.authBusy || !cloud.ready;
+      const reg = ui.authMode === "register";
+      html += `<div class="auth-card">
+        <button class="google-btn" data-act="google-login" ${busy ? "disabled" : ""}><span class="g">G</span>用 Google 账号登录</button>
+        <div class="divider">或者用邮箱</div>
+        <div class="seg" role="group" aria-label="登录或注册" style="grid-template-columns:1fr 1fr">
+          <button data-act="auth-mode" data-mode="login" aria-pressed="${!reg}">登录</button>
+          <button data-act="auth-mode" data-mode="register" aria-pressed="${reg}">注册新账号</button>
+        </div>
+        <form class="auth-form" id="auth-form" novalidate>
+          <input class="field" id="auth-email" type="email" autocomplete="email" placeholder="邮箱" value="${esc(ui.authEmail)}" required>
+          <input class="field" id="auth-pass" type="password" autocomplete="${reg ? "new-password" : "current-password"}" placeholder="${reg ? "设置密码（至少 6 位）" : "密码"}" value="${esc(ui.authPass)}" required>
+          <button class="primary" type="submit" ${busy ? "disabled" : ""}>${ui.authBusy ? "请稍候…" : reg ? "注册并登录" : "登录"}</button>
+        </form>
+        ${!reg ? `<button class="link-btn" data-act="forgot-pass">忘记密码？</button>` : ""}
+        ${ui.authError ? `<p class="error-line" role="alert">${esc(ui.authError)}</p>` : ""}
+      </div>
+      <p class="lead" style="margin-top:14px">不登录也可以继续用，记录只存在这个浏览器里。第一次登录时，这台设备上的记录会一起带上云端。</p>`;
+      return html;
+    }
+
+    const u = cloud.user;
+    html += `<div class="auth-card">
+      <div class="kv"><span class="row-sub">登录账号</span><b>${esc(u.email || u.displayName || "已登录")}</b></div>
+      <div class="kv"><span class="row-sub">云端同步</span><b>${syncBadge()}</b></div>
+      ${cloud.errorText ? `<p class="error-line" role="alert">${esc(cloud.errorText)}</p>` : ""}
+      <div class="btn-row"><button class="ghost go" data-act="sync-now">立即同步</button></div>
+    </div>`;
+
+    if (cloud.conflict) {
+      const r = cloud.conflict.remote;
+      const armed = ui.armed === "keep-local";
+      html += `<section class="section"><h2>保留哪一份记录？</h2>
+        <p class="lead">这个账号在云端已经有记录，这台设备上也有一份。选一份保留，另一份会被覆盖。</p>
+        <div class="choice">
+          <button class="nav-row" data-act="keep-cloud"><span class="nav-row-main"><span class="nav-row-title">用云端的记录</span>
+            <span class="row-sub">打过 ${scoredCount(r)} 次分 · 推荐</span></span><span class="nav-row-chev" aria-hidden="true">›</span></button>
+          <button class="nav-row" data-act="keep-local"><span class="nav-row-main"><span class="nav-row-title">${armed ? "再点一次：用这台设备的记录覆盖云端" : "用这台设备的记录"}</span>
+            <span class="row-sub">打过 ${scoredCount(state)} 次分</span></span><span class="nav-row-chev" aria-hidden="true">›</span></button>
+        </div></section>`;
+    }
+
+    const armedOut = ui.armed === "logout";
+    html += `<section class="section"><div class="btn-row">
+      <button class="danger-link" data-act="logout">${armedOut ? "再点一次：退出（这台设备上的记录会清除，云端的保留）" : "退出登录"}</button></div></section>`;
+    return html;
+  }
+
+  /* ================= cloud sync ================= */
+  function hasOwnData(s) {
+    const scored = Object.entries(s.weeks).some(([k, w]) => !(s.sampleWeeks || []).includes(k) && w.days.some((d) => d.some((e) => e.score)));
+    const defaultIds = DEFAULT_ACTS.map((a) => a[0]);
+    const customActs = s.acts.some((a) => !defaultIds.includes(a.id) || a.hidden);
+    const customTpl = JSON.stringify(s.template) !== JSON.stringify(DEFAULT_TEMPLATE);
+    return scored || customActs || customTpl;
+  }
+
+  const AUTH_ERRORS = {
+    "auth/invalid-email": "邮箱格式不对，检查一下吧",
+    "auth/missing-email": "先填一下邮箱",
+    "auth/missing-password": "先填一下密码",
+    "auth/weak-password": "密码太短了，至少 6 位",
+    "auth/email-already-in-use": "这个邮箱已经注册过了，直接登录就好",
+    "auth/invalid-credential": "邮箱或密码不对",
+    "auth/wrong-password": "邮箱或密码不对",
+    "auth/user-not-found": "还没有用这个邮箱注册过",
+    "auth/too-many-requests": "尝试次数太多了，过一会儿再试",
+    "auth/network-request-failed": "网络连接失败，检查网络后再试",
+    "auth/popup-closed-by-user": "登录窗口被关掉了，再试一次吧",
+    "auth/cancelled-popup-request": "登录窗口被关掉了，再试一次吧",
+    "auth/unauthorized-domain": "这个网址还没加入 Firebase 的授权域名（Authentication → Settings → Authorized domains）",
+    "auth/operation-not-allowed": "这种登录方式还没在 Firebase 里开启（Authentication → Sign-in method）",
+  };
+  const authMessage = (e) => AUTH_ERRORS[e && e.code] || `出了点问题：${(e && (e.code || e.message)) || "未知错误"}`;
+
+  const cloud = {
+    ready: false, failed: false, user: null, conflict: null,
+    status: "idle", errorText: "", fb: null, unsub: null, timer: null, loaded: false,
+
+    async init() {
+      const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
+      try {
+        const [appM, authM, fsM] = await Promise.all([
+          import(base + "firebase-app.js"), import(base + "firebase-auth.js"), import(base + "firebase-firestore.js"),
+        ]);
+        const app = appM.initializeApp(FIREBASE_CONFIG);
+        this.fb = { ...authM, ...fsM, auth: authM.getAuth(app), db: fsM.getFirestore(app) };
+      } catch (e) {
+        this.failed = true;
+        if (ui.tab === "account") render();
+        return;
+      }
+      this.ready = true;
+      if (ui.tab === "account") render();
+      this.fb.onAuthStateChanged(this.fb.auth, (user) => this.onUser(user));
+      window.addEventListener("online", () => { this.updateBadges(); this.schedulePush(); });
+      window.addEventListener("offline", () => this.updateBadges());
+    },
+
+    onUser(user) {
+      if (this.unsub) { this.unsub(); this.unsub = null; }
+      this.user = user; this.conflict = null; this.loaded = false; this.errorText = "";
+      if (user) {
+        this.setStatus("busy");
+        const ref = this.fb.doc(this.fb.db, "users", user.uid);
+        this.unsub = this.fb.onSnapshot(ref, (snap) => this.onRemote(snap), (err) => {
+          this.errorText = err.code === "permission-denied" ? "云端拒绝了访问：请检查 Firestore 的安全规则是否已发布" : authMessage(err);
+          this.setStatus("err"); render();
+        });
+      }
+      ui.authBusy = false;
+      render();
+    },
+
+    onRemote(snap) {
+      if (snap.metadata.hasPendingWrites) return;
+      const uid = this.user.uid;
+      this.loaded = true;
+      if (!snap.exists()) {
+        state.owner = uid; save(false); this.push(); render(); return;
+      }
+      let remote;
+      try { remote = JSON.parse(snap.data().data); } catch (e) { this.errorText = "云端的数据读不出来"; this.setStatus("err"); return; }
+      const remoteAt = snap.data().updatedAt || 0;
+      if (state.owner !== uid) {
+        if (!hasOwnData(state) || scoredCount(state) === 0 && JSON.stringify(state.template) === JSON.stringify(remote.template)) {
+          this.adopt(remote, remoteAt);
+        } else {
+          this.conflict = { remote, remoteAt };
+          this.setStatus("idle"); render();
+        }
+        return;
+      }
+      if (remoteAt > (state.updatedAt || 0)) this.adopt(remote, remoteAt);
+      else if (remoteAt < (state.updatedAt || 0)) this.push();
+      else this.setStatus("ok");
+    },
+
+    adopt(remote, remoteAt) {
+      remote.sampleWeeks = remote.sampleWeeks || [];
+      remote.owner = this.user.uid;
+      remote.updatedAt = remoteAt;
+      this.conflict = null;
+      if (ui.sheet) { this.pending = [remote, remoteAt]; return; }
+      state = remote; save(false);
+      this.setStatus("ok"); render();
+    },
+
+    applyPending() {
+      if (!this.pending || ui.sheet) return;
+      const [remote, remoteAt] = this.pending; this.pending = null;
+      if (remoteAt > (state.updatedAt || 0)) { state = remote; save(false); this.setStatus("ok"); }
+    },
+
+    canPush() { return this.ready && this.user && this.loaded && !this.conflict && state.owner === this.user.uid; },
+
+    schedulePush() {
+      if (!this.canPush()) return;
+      clearTimeout(this.timer);
+      this.setStatus("busy");
+      this.timer = setTimeout(() => this.push(), 1200);
+    },
+
+    async push() {
+      if (!this.canPush()) return;
+      clearTimeout(this.timer);
+      if (!state.updatedAt) state.updatedAt = Date.now();
+      const at = state.updatedAt;
+      this.setStatus("busy");
+      try {
+        const { owner, ...data } = state;
+        await this.fb.setDoc(this.fb.doc(this.fb.db, "users", this.user.uid), { data: JSON.stringify(data), updatedAt: at });
+        this.errorText = "";
+        if (state.updatedAt === at) this.setStatus("ok");
+      } catch (err) {
+        this.errorText = err.code === "permission-denied" ? "云端拒绝了写入：请检查 Firestore 的安全规则是否已发布" : authMessage(err);
+        this.setStatus("err");
+        if (ui.tab === "account") render();
+      }
+    },
+
+    setStatus(st) { this.status = st; this.updateBadges(); },
+    statusView() {
+      if (!this.user) return ["", "未登录"];
+      if (this.conflict) return ["busy", "等你选择保留哪份记录"];
+      if (!navigator.onLine) return ["", "离线 · 联网后自动同步"];
+      return { ok: ["ok", "已同步"], busy: ["busy", "同步中…"], err: ["err", "同步失败"], idle: ["", "已连接"] }[this.status] || ["", "已连接"];
+    },
+    updateBadges() {
+      document.querySelectorAll(".sync-slot").forEach((el) => {
+        const [cls, text] = this.statusView();
+        el.innerHTML = `<i class="sync-dot ${cls}"></i>${esc(text)}`;
+      });
+    },
+  };
 
   /* ================= sheet ================= */
   function openEntrySheet(mode, day, idx) {
@@ -903,6 +1186,42 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       applyTheme(ui.theme);
       try { localStorage.setItem(THEME_KEY, ui.theme); } catch (e) { /* ignore */ }
     },
+    "open-account": () => { if (ui.tab !== "account") ui.prevTab = ui.tab; ui.authError = ""; goTab("account"); },
+    "close-account": () => goTab(ui.prevTab || "week"),
+    "auth-mode": (el) => { ui.authMode = el.dataset.mode; ui.authError = ""; },
+    "google-login": () => {
+      if (!cloud.ready) return false;
+      const { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } = cloud.fb;
+      const provider = new GoogleAuthProvider();
+      ui.authBusy = true; ui.authError = "";
+      signInWithPopup(auth, provider).catch((e) => {
+        if (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment") return signInWithRedirect(auth, provider);
+        ui.authBusy = false; ui.authError = authMessage(e); render();
+      });
+    },
+    "forgot-pass": () => {
+      if (!cloud.ready) return false;
+      const email = ui.authEmail.trim();
+      if (!email) { ui.authError = "先在上面填好邮箱，再点「忘记密码」"; return; }
+      cloud.fb.sendPasswordResetEmail(cloud.fb.auth, email)
+        .then(() => { ui.authError = ""; toast("重设密码的邮件已发出，去邮箱看看"); render(); })
+        .catch((e) => { ui.authError = authMessage(e); render(); });
+    },
+    "sync-now": () => { cloud.push(); return false; },
+    "keep-cloud": () => { const c = cloud.conflict; cloud.adopt(c.remote, c.remoteAt); toast("已换成云端的记录"); },
+    "keep-local": () => {
+      if (!arm("keep-local")) return false;
+      cloud.conflict = null; state.owner = cloud.user.uid; save(); toast("已用这台设备的记录覆盖云端");
+    },
+    logout: () => {
+      if (!arm("logout")) return false;
+      cloud.fb.signOut(cloud.fb.auth).then(() => {
+        state = freshState(); seedSample(state); save(false);
+        ui.week = thisWeekKey(); ui.backup = ""; ui.authPass = "";
+        toast("已退出，云端的记录都还在"); render();
+      });
+      return false;
+    },
     "open-settings": () => goTab("settings"),
     "close-settings": () => goTab("rhythm"),
     "make-backup": () => { ui.backup = JSON.stringify(state); },
@@ -921,7 +1240,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     },
     reset: () => {
       if (!arm("reset")) return false;
-      state = freshState(); save(); ui.week = thisWeekKey(); ui.backup = ""; toast("已清空，从头开始");
+      const owner = state.owner;
+      state = freshState(); state.owner = owner; save(); ui.week = thisWeekKey(); ui.backup = ""; toast("已清空，从头开始");
     },
   };
 
@@ -930,6 +1250,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       const s = JSON.parse(text);
       if (!s || !Array.isArray(s.acts) || !Array.isArray(s.template) || typeof s.weeks !== "object") throw new Error();
       s.sampleWeeks = s.sampleWeeks || [];
+      s.owner = state.owner;
       state = s; save(); ui.week = thisWeekKey(); toast("导入成功");
     } catch (e) {
       toast("导入失败：这不是有效的备份内容");
@@ -951,6 +1272,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       list.splice(s.idx, 1); save();
     }
     ui.sheet = null; ui.armed = null;
+    cloud.applyPending();
   }
 
   document.addEventListener("click", (ev) => {
@@ -963,19 +1285,33 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const name = el.dataset.act;
     const fn = actions[name];
     if (!fn) return;
-    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset"].includes(name);
+    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset", "keep-local", "logout"].includes(name);
     if (!keepArm) ui.armed = null;
     const res = fn(el, ev);
     if (res !== false) render();
   });
   document.addEventListener("input", (ev) => {
     if (ev.target.id === "entry-note" && ui.sheet) ui.sheet.draft.note = ev.target.value;
+    if (ev.target.id === "auth-email") ui.authEmail = ev.target.value;
+    if (ev.target.id === "auth-pass") ui.authPass = ev.target.value;
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && ui.sheet) { closeSheet(); render(); }
     if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions["save-entry"](); render(); }
   });
   document.addEventListener("submit", (ev) => {
+    if (ev.target.id === "auth-form") {
+      ev.preventDefault();
+      if (!cloud.ready || ui.authBusy) return;
+      const { auth, signInWithEmailAndPassword, createUserWithEmailAndPassword } = cloud.fb;
+      const email = ui.authEmail.trim(), pass = ui.authPass;
+      if (!email || !pass) { ui.authError = !email ? "先填一下邮箱" : "先填一下密码"; render(); return; }
+      const fn = ui.authMode === "register" ? createUserWithEmailAndPassword : signInWithEmailAndPassword;
+      ui.authBusy = true; ui.authError = ""; render();
+      fn(auth, email, pass).then(() => { ui.authPass = ""; toast(ui.authMode === "register" ? "注册成功，已开启云端同步" : "登录成功"); })
+        .catch((e) => { ui.authBusy = false; ui.authError = authMessage(e); render(); });
+      return;
+    }
     if (ev.target.id !== "add-form") return;
     ev.preventDefault();
     const name = document.getElementById("new-act-name").value.trim();
@@ -993,8 +1329,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     r.readAsText(f);
   });
 
-  save();
+  save(false);
   render();
+  cloud.init();
 })();
 </script>
 </body>

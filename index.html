@@ -6,7 +6,10 @@
 <title>锚点与留白</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;900&display=swap">
+<!-- Load web fonts without blocking the first paint: where Google Fonts is unreachable
+     (e.g. mainland China) the page shows right away in the device's own fonts. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;900&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@600;900&display=swap"></noscript>
 <style>
 :root {
   --bg: #FFF9F3;
@@ -806,7 +809,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     </header>`;
 
     if (cloud.failed) {
-      html += `<div class="banner plan"><span>暂时连不上云端服务，请检查网络后刷新页面。不登录也可以照常使用。</span></div>`;
+      html += `<div class="banner plan"><span>暂时连不上云端服务，登录和同步用不了。其他功能都能照常使用，记录会保存在这台设备上；记得偶尔去「设置 → 备份与恢复」存一份。</span></div>`;
+    } else if (!cloud.ready) {
+      html += `<div class="banner sample"><span>正在连接云端…</span></div>`;
     }
 
     if (!cloud.user) {
@@ -885,6 +890,12 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   };
   const authMessage = (e) => AUTH_ERRORS[e && e.code] || `出了点问题：${(e && (e.code || e.message)) || "未知错误"}`;
 
+  // Resolves or rejects like p, but rejects with { code } after ms if p is still pending.
+  function withTimeout(p, ms, code) {
+    let t;
+    return Promise.race([p, new Promise((_, reject) => { t = setTimeout(() => reject({ code }), ms); })]).finally(() => clearTimeout(t));
+  }
+
   const cloud = {
     ready: false, failed: false, user: null, conflict: null,
     status: "idle", errorText: "", fb: null, unsub: null, timer: null, loaded: false,
@@ -892,9 +903,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     async init() {
       const base = `https://www.gstatic.com/firebasejs/${FIREBASE_VERSION}/`;
       try {
-        const [appM, authM, fsM] = await Promise.all([
+        const [appM, authM, fsM] = await withTimeout(Promise.all([
           import(base + "firebase-app.js"), import(base + "firebase-auth.js"), import(base + "firebase-firestore.js"),
-        ]);
+        ]), 8000, "cloud/timeout");
         const app = appM.initializeApp(FIREBASE_CONFIG);
         this.fb = { ...authM, ...fsM, auth: authM.getAuth(app), db: fsM.getFirestore(app) };
       } catch (e) {
@@ -914,6 +925,12 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       this.user = user; this.conflict = null; this.loaded = false; this.errorText = "";
       if (user) {
         this.setStatus("busy");
+        clearTimeout(this.loadTimer);
+        this.loadTimer = setTimeout(() => {
+          if (this.user !== user || this.loaded) return;
+          this.errorText = "连不上云端数据库，记录先保存在这台设备上，联网顺畅后会自动同步";
+          this.setStatus("err"); if (ui.tab === "account") render();
+        }, 12000);
         const ref = this.fb.doc(this.fb.db, "users", user.uid);
         this.unsub = this.fb.onSnapshot(ref, (snap) => this.onRemote(snap), (err) => {
           this.errorText = err.code === "permission-denied" ? "云端拒绝了访问：请检查 Firestore 的安全规则是否已发布" : authMessage(err);
@@ -928,6 +945,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       if (snap.metadata.hasPendingWrites) return;
       const uid = this.user.uid;
       this.loaded = true;
+      if (this.errorText.startsWith("连不上云端数据库")) this.errorText = "";
       if (!snap.exists()) {
         state.owner = uid; save(false); this.push(); render(); return;
       }
@@ -1194,7 +1212,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       const { auth, GoogleAuthProvider, signInWithPopup, signInWithRedirect } = cloud.fb;
       const provider = new GoogleAuthProvider();
       ui.authBusy = true; ui.authError = "";
-      signInWithPopup(auth, provider).catch((e) => {
+      withTimeout(signInWithPopup(auth, provider), 120000, "auth/network-request-failed").catch((e) => {
         if (e.code === "auth/popup-blocked" || e.code === "auth/operation-not-supported-in-this-environment") return signInWithRedirect(auth, provider);
         ui.authBusy = false; ui.authError = authMessage(e); render();
       });
@@ -1203,7 +1221,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       if (!cloud.ready) return false;
       const email = ui.authEmail.trim();
       if (!email) { ui.authError = "先在上面填好邮箱，再点「忘记密码」"; return; }
-      cloud.fb.sendPasswordResetEmail(cloud.fb.auth, email)
+      withTimeout(cloud.fb.sendPasswordResetEmail(cloud.fb.auth, email), 15000, "auth/network-request-failed")
         .then(() => { ui.authError = ""; toast("重设密码的邮件已发出，去邮箱看看"); render(); })
         .catch((e) => { ui.authError = authMessage(e); render(); });
     },
@@ -1308,7 +1326,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       if (!email || !pass) { ui.authError = !email ? "先填一下邮箱" : "先填一下密码"; render(); return; }
       const fn = ui.authMode === "register" ? createUserWithEmailAndPassword : signInWithEmailAndPassword;
       ui.authBusy = true; ui.authError = ""; render();
-      fn(auth, email, pass).then(() => { ui.authPass = ""; toast(ui.authMode === "register" ? "注册成功，已开启云端同步" : "登录成功"); })
+      withTimeout(fn(auth, email, pass), 15000, "auth/network-request-failed").then(() => { ui.authPass = ""; toast(ui.authMode === "register" ? "注册成功，已开启云端同步" : "登录成功"); })
         .catch((e) => { ui.authBusy = false; ui.authError = authMessage(e); render(); });
       return;
     }

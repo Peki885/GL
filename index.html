@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>锚点与留白</title>
+<title>Have a nice day~</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- Load web fonts without blocking the first paint: where Google Fonts is unreachable
@@ -97,8 +97,8 @@ button { cursor: pointer; }
 
 /* ---------- header ---------- */
 .top { padding-block: 22px 14px; display: grid; gap: 4px; }
-.brand { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.brand-name { font: 900 15px/1 var(--serif); letter-spacing: .12em; color: var(--accent); }
+.brand { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.brand-name { font: 900 16px/1.2 var(--serif); letter-spacing: .01em; color: var(--accent); white-space: nowrap; }
 .brand-sub { font: 400 12px/1 var(--mono); color: var(--ink-3); letter-spacing: .04em; }
 .week-nav { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .week-title { font: 600 clamp(24px, 6.4vw, 32px)/1.2 var(--serif); margin: 0; flex: 1; text-wrap: balance; }
@@ -582,7 +582,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   function header(title, sub) {
     return `<header class="top">
-      <div class="brand"><span class="brand-name">锚点与留白</span><span class="brand-right"><span class="brand-sub">${esc(sub || "")}</span>${acctButton()}</span></div>
+      <div class="brand"><span class="brand-name">Have a nice day~</span><span class="brand-right"><span class="brand-sub">${esc(sub || "")}</span>${acctButton()}</span></div>
       ${title}
     </header>`;
   }

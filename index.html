@@ -218,6 +218,14 @@ button { cursor: pointer; }
 .nav-row-chev { font-size: 22px; line-height: 1; color: var(--ink-3); }
 .back-btn { border: 0; background: transparent; padding: 4px 0; color: var(--anchor-ink); font-size: 15px; font-weight: 500; }
 
+/* ---------- welcome ---------- */
+body.onboarding .tabbar { display: none; }
+.welcome { display: grid; gap: 16px; padding-block: 12vh 32px; max-width: 520px; }
+.welcome-title { font: 600 clamp(28px, 7.5vw, 38px)/1.25 var(--serif); margin: 0; text-wrap: balance; }
+.welcome .lead { font-size: 15px; }
+.welcome .lead b { color: var(--ink); font-weight: 500; }
+.welcome .link-btn { font-size: 14px; }
+
 /* ---------- account ---------- */
 .brand-right { display: flex; align-items: center; gap: 10px; }
 .acct {
@@ -320,6 +328,15 @@ button { cursor: pointer; }
 .pick[aria-pressed="true"] { background: var(--anchor-soft); color: var(--anchor-ink); font-weight: 500; }
 .add-pick { color: var(--anchor-ink); font-weight: 500; }
 .new-anchor { display: grid; grid-template-columns: 1fr auto; gap: 8px; padding: 6px 0; }
+.lib-list { display: grid; gap: 2px; }
+.lib-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left;
+  border: 0; background: transparent; padding: 9px 10px; border-radius: 8px;
+}
+.lib-item:hover { background: var(--surface-2); }
+.lib-item small { color: var(--anchor-ink); font-weight: 500; white-space: nowrap; }
+.lib-item[disabled] { cursor: default; color: var(--ink-3); }
+.lib-item[disabled] small { color: var(--ink-3); font-weight: 400; }
 .pick small { font: 400 11px var(--mono); color: var(--ink-3); white-space: nowrap; }
 .scores { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .score {
@@ -412,6 +429,16 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     ["meet", "约一个人吃饭或散步", "connect"],
     ["call", "给远方的家人朋友打一通不赶时间的电话", "connect"],
   ];
+  // Generic suggestions anyone can use; people add the ones they like to their own menu.
+  const LIBRARY = {
+    rhythm: ["健身", "瑜伽或拉伸", "夜跑", "周五电影夜", "周末慢早餐", "固定的读书时间", "周日整理房间，规划下周"],
+    senses: ["泡个澡，配一杯热饮", "认真给自己做一顿饭", "逛菜市场，买一样没吃过的", "给自己买一束花", "早睡一次，睡到自然醒", "完整听一张专辑", "泡一壶好茶或做一杯手冲", "晒太阳发呆半小时"],
+    city: ["探一家新咖啡馆", "走一条没走过的路", "去一家独立书店", "看一场展览", "逛一个公园或植物园", "坐公交到终点站再回来", "去一家从没去过的小馆子", "逛一次本地市集"],
+    create: ["写一篇日记或随笔", "整理读书笔记，写一段自己的想法", "出门拍一组照片", "画画或做手账", "学一道新菜", "做一份旅行攻略（不一定要去）", "抄写或翻译一段喜欢的文字", "学唱一首歌"],
+    joy: ["玩一晚喜欢的游戏", "主题电影夜", "重温一部老剧", "吃一顿想了很久的东西", "做一件小时候爱做的事", "拼图或拼乐高", "去看一场演出"],
+    connect: ["约一个人吃饭或散步", "给远方的家人朋友打个不赶时间的电话", "给朋友寄一张明信片", "组织一次小聚会", "和朋友一起做饭", "参加一次兴趣小组", "做一次志愿者"],
+  };
+
   const DEFAULT_TEMPLATE = [
     [{ kind: "blank" }],
     [{ kind: "anchor", act: "gym" }],
@@ -440,10 +467,10 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   const avgOf = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
 
   /* ================= state ================= */
-  let state = load();
   let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme(),
     prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
   applyTheme(ui.theme);
+  let state = load();
   const hashTab = (location.hash || "").slice(1);
   if (["week", "menu", "review", "rhythm", "settings", "account"].includes(hashTab)) ui.tab = hashTab;
 
@@ -456,18 +483,27 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     else document.documentElement.setAttribute("data-theme", t);
   }
 
-  function freshState() {
-    return {
+  // The example: the author's own menu, template and two weeks of records.
+  function sampleState() {
+    const s = {
       v: 1,
       acts: DEFAULT_ACTS.map(([id, name, cat]) => ({ id, name, cat, hidden: false, anchor: cat === "rhythm" })),
       template: clone(DEFAULT_TEMPLATE),
       weeks: {},
       sampleWeeks: [],
+      sample: true,
     };
+    seedSample(s);
+    return s;
+  }
+  // A blank start: the five categories exist, but the menu and the week are empty.
+  function emptyState() {
+    return { v: 1, acts: [], template: [[], [], [], [], [], [], []], weeks: {}, sampleWeeks: [], sample: false };
   }
   // Older saves have no anchor flag: anchors were the 日常节奏 items plus anything used as an anchor in the template.
   function normalize(s) {
     s.sampleWeeks = s.sampleWeeks || [];
+    if (s.sample === undefined) s.sample = s.sampleWeeks.length > 0;
     const tplAnchors = new Set(s.template.flat().filter((t) => t.kind === "anchor" && t.act).map((t) => t.act));
     s.acts.forEach((a) => { if (a.anchor === undefined) a.anchor = a.cat === "rhythm" || tplAnchors.has(a.id); });
     return s;
@@ -481,9 +517,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         if (s && s.acts && s.template && s.weeks) return normalize(s);
       }
     } catch (e) { /* storage unavailable */ }
-    const s = freshState();
-    seedSample(s);
-    return s;
+    // first visit: nothing is saved until the person picks how to start
+    ui.onboarding = true;
+    return emptyState();
   }
   // touch = a real change by the person (bumps updatedAt and syncs to the cloud)
   function save(touch = true) {
@@ -573,7 +609,24 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   const $sheet = document.getElementById("sheet");
   const $toast = document.getElementById("toast");
 
+  function viewWelcome() {
+    return `<section class="welcome">
+      <span class="brand-name">Have a nice day~</span>
+      <h1 class="welcome-title">设计一份只属于你的一周</h1>
+      <p class="lead">用三样东西安排生活：固定的<b>锚点</b>，随心挑选的<b>弹性菜单</b>，和什么都不安排的<b>留白</b>。做完一件事打个分，几周后，你会看清哪些事值得留下。</p>
+      <div class="choice">
+        <button class="nav-row" data-act="start-sample"><span class="nav-row-main"><span class="nav-row-title">先看看示例</span>
+          <span class="row-sub">载入一份别人的菜单和两周记录，看看它怎么用；随时可以清除</span></span><span class="nav-row-chev" aria-hidden="true">›</span></button>
+        <button class="nav-row" data-act="start-empty"><span class="nav-row-main"><span class="nav-row-title">直接开始</span>
+          <span class="row-sub">从空白开始，从灵感库里挑几件事，搭起自己的一周</span></span><span class="nav-row-chev" aria-hidden="true">›</span></button>
+      </div>
+      <button class="link-btn" data-act="start-login">已经有账号？登录</button>
+    </section>`;
+  }
+
   function render() {
+    document.body.classList.toggle("onboarding", !!ui.onboarding);
+    if (ui.onboarding) { $app.innerHTML = viewWelcome(); $sheet.innerHTML = ""; return; }
     document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-current", b.dataset.tab === navTab() ? "page" : "false"));
     $app.innerHTML = ({ week: viewWeek, menu: viewMenu, review: viewReview, rhythm: viewRhythm, settings: viewSettings, account: viewAccount })[ui.tab]();
     renderSheet();
@@ -632,8 +685,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       html += `<div class="banner plan"><span>云端和这台设备上各有一份记录，选一份保留吧</span>
         <div class="actions"><button data-act="open-account">去选择</button></div></div>`;
     }
-    if (state.sampleWeeks.length) {
-      html += `<div class="banner sample"><span>前两周是<b>示例记录</b>，让你先看看「回顾」长什么样。</span>
+    if (state.sample) {
+      html += `<div class="banner sample"><span>现在看到的是<b>示例</b>：菜单、每周安排和前两周的记录都是别人的生活。</span>
         <div class="actions"><button data-act="clear-sample">清除示例，开始我的记录</button></div></div>`;
     }
     if (unpicked.length) {
@@ -669,7 +722,12 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   function viewMenu() {
     const { map } = collect();
     let html = header(`<h1 class="week-title">我的生活菜单</h1>
-      <p class="lead">一份只属于你的清单，活出你想要的人生吧。</p>`, `${state.acts.filter((a) => !a.hidden).length} 项`);
+      <p class="lead">一份只属于你的清单，活出你想要的人生吧。</p>
+      <div><button class="ghost go" data-act="open-library">从灵感库添加</button></div>`, `${state.acts.filter((a) => !a.hidden).length} 项`);
+    if (!state.acts.some((a) => !a.hidden)) {
+      html += `<div class="banner plan"><span>菜单还是空的。从灵感库挑几件想试试的事，或者在最下面自己写。</span>
+        <div class="actions"><button data-act="open-library">打开灵感库</button></div></div>`;
+    }
     const row = (a, extra = "") => {
       const s = actStats(map, a.id);
       const armed = ui.armed === "hide:" + a.id;
@@ -885,7 +943,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const scored = Object.entries(s.weeks).some(([k, w]) => !(s.sampleWeeks || []).includes(k) && w.days.some((d) => d.some((e) => e.score)));
     const defaultIds = DEFAULT_ACTS.map((a) => a[0]);
     const customActs = s.acts.some((a) => !defaultIds.includes(a.id) || a.hidden);
-    const customTpl = JSON.stringify(s.template) !== JSON.stringify(DEFAULT_TEMPLATE);
+    const customTpl = s.template.some((d) => d.length) && JSON.stringify(s.template) !== JSON.stringify(DEFAULT_TEMPLATE);
     return scored || customActs || customTpl;
   }
 
@@ -989,7 +1047,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       remote.updatedAt = remoteAt;
       this.conflict = null;
       if (ui.sheet) { this.pending = [remote, remoteAt]; return; }
-      state = remote; save(false);
+      state = remote; ui.onboarding = false; save(false);
       this.setStatus("ok"); render();
     },
 
@@ -1054,6 +1112,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const s = ui.sheet;
     if (!s) { $sheet.innerHTML = ""; return; }
     if (s.mode === "promote") { $sheet.innerHTML = promoteSheet(s); return; }
+    if (s.mode === "library") { $sheet.innerHTML = librarySheet(); return; }
     const d = s.draft;
     const isEntry = s.mode === "entry";
     const date = isEntry ? addDays(parseKey(ui.week), s.day) : null;
@@ -1095,6 +1154,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
           }
         } else {
           for (const c of [...CATS.slice(1), CATS[0]]) html += group(c, state.acts.filter((a) => a.cat === c.id && !a.hidden));
+          if (!state.acts.some((a) => !a.hidden)) html += `<div class="empty-state">菜单还是空的，先去「菜单」页从灵感库挑几件吧。</div>`;
         }
         html += `</div>`;
       }
@@ -1115,6 +1175,25 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <div class="btn-row"><button class="ghost" data-act="close-sheet-btn">取消</button><button class="primary" data-act="save-entry">保存</button></div>
       </div></div></div>`;
     $sheet.innerHTML = html;
+  }
+
+  function librarySheet() {
+    const have = new Set(state.acts.filter((a) => !a.hidden).map((a) => a.name));
+    let html = `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="灵感库">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2>灵感库</h2></div>
+      <p class="lead" style="margin-top:-8px">挑几件想试试的，加进你的生活菜单。日常节奏里的会成为锚点。</p>`;
+    for (const c of CATS) {
+      html += `<div class="block"><div class="cat-head" style="margin:0"><i class="dot" style="background:${c.color}"></i><span class="label">${c.name}</span></div><div class="lib-list">`;
+      for (const name of LIBRARY[c.id]) {
+        const added = have.has(name);
+        html += `<button class="lib-item" data-act="lib-add" data-cat="${c.id}" data-name="${esc(name)}" ${added ? "disabled" : ""}>
+          <span>${esc(name)}</span><small>${added ? "已添加" : "+ 添加"}</small></button>`;
+      }
+      html += `</div></div>`;
+    }
+    html += `<div class="sheet-foot"><span></span><button class="primary" data-act="close-sheet-btn">完成</button></div></div></div>`;
+    return html;
   }
 
   function promoteSheet(s) {
@@ -1151,10 +1230,16 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     "week-prev": () => { ui.week = keyOf(addDays(parseKey(ui.week), -7)); },
     "week-next": () => { ui.week = keyOf(addDays(parseKey(ui.week), 7)); },
     "week-now": () => { ui.week = thisWeekKey(); },
-    "clear-sample": () => {
-      state.sampleWeeks.forEach((k) => delete state.weeks[k]);
-      state.sampleWeeks = [];
-      save(); toast("示例已清除，从这周开始记录吧");
+    "clear-sample": () => { clearSample(); save(); toast("示例已清除，从这周开始记录吧"); },
+    "start-sample": () => { state = sampleState(); ui.onboarding = false; save(false); goTab("week"); },
+    "start-empty": () => { state = emptyState(); ui.onboarding = false; save(false); goTab("menu"); },
+    "start-login": () => { state = emptyState(); ui.onboarding = false; save(false); ui.prevTab = "week"; goTab("account"); },
+    "open-library": () => { ui.sheet = { mode: "library" }; },
+    "lib-add": (el) => {
+      const cat = el.dataset.cat, name = el.dataset.name;
+      state.acts.push({ id: uid(), name, cat, hidden: false, anchor: cat === "rhythm" });
+      save(); renderSheet(); render(); toast(cat === "rhythm" ? `已加入「${name}」，它是一个锚点` : `已加入「${name}」`);
+      return false;
     },
     "open-entry": (el) => { openEntrySheet("entry", +el.dataset.day, +el.dataset.idx); return false; },
     "add-entry": (el) => {
@@ -1284,7 +1369,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     logout: () => {
       if (!arm("logout")) return false;
       cloud.fb.signOut(cloud.fb.auth).then(() => {
-        state = freshState(); seedSample(state); save(false);
+        state = emptyState(); ui.onboarding = true;
+        try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
         ui.week = thisWeekKey(); ui.backup = ""; ui.authPass = "";
         toast("已退出，云端的记录都还在"); render();
       });
@@ -1309,7 +1395,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     reset: () => {
       if (!arm("reset")) return false;
       const owner = state.owner;
-      state = freshState(); state.owner = owner; save(); ui.week = thisWeekKey(); ui.backup = ""; toast("已清空，从头开始");
+      state = emptyState(); state.owner = owner; save(); ui.week = thisWeekKey(); ui.backup = "";
+      if (!owner) { ui.onboarding = true; try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ } }
+      toast("已清空，从头开始");
     },
   };
 
@@ -1324,6 +1412,21 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       toast("导入失败：这不是有效的备份内容");
     }
     render();
+  }
+
+  // Remove everything that came with the example, but keep anything the person made
+  // themselves or already used in their own records.
+  function clearSample() {
+    state.sampleWeeks.forEach((k) => delete state.weeks[k]);
+    state.sampleWeeks = [];
+    const defaultIds = new Set(DEFAULT_ACTS.map((a) => a[0]));
+    const used = new Set();
+    Object.values(state.weeks).forEach((w) => w.days.forEach((d) => d.forEach((e) => { if (e.score && e.act) used.add(e.act); })));
+    const keep = (id) => !!id && (!defaultIds.has(id) || used.has(id));
+    state.acts = state.acts.filter((a) => keep(a.id));
+    state.template = state.template.map((d) => d.filter((t) => keep(t.act)));
+    Object.values(state.weeks).forEach((w) => { w.days = w.days.map((d) => d.filter((e) => e.score || keep(e.act))); });
+    state.sample = false;
   }
 
   function goTab(t) {
@@ -1399,7 +1502,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     r.readAsText(f);
   });
 
-  save(false);
+  if (!ui.onboarding) save(false);
   render();
   cloud.init();
 })();

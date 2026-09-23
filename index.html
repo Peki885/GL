@@ -725,7 +725,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       <p class="lead">一份只属于你的清单，活出你想要的人生吧。</p>
       <div><button class="ghost go" data-act="open-library">从灵感库添加</button></div>`, `${state.acts.filter((a) => !a.hidden).length} 项`);
     if (!state.acts.some((a) => !a.hidden)) {
-      html += `<div class="banner plan"><span>菜单还是空的。从灵感库挑几件想试试的事，或者在最下面自己写。</span>
+      html += `<div class="banner plan"><span>菜单还是空的。从灵感库挑几件想试试的事，或者在最下面添加。</span>
         <div class="actions"><button data-act="open-library">打开灵感库</button></div></div>`;
     }
     const row = (a, extra = "") => {
@@ -781,7 +781,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     }).sort((x, y) => y.avg - x.avg || y.n - x.n);
 
     html += `<section class="section"><h2>按开心程度排序</h2><div class="card">`;
-    if (!rows.length) html += `<div class="empty-state">还没有打分。在「本周」里点开一项，做完之后打个分就行。</div>`;
+    if (!rows.length) html += `<div class="empty-state">还没有打分。在「本周」里点开一项，做完之后打个分吧。</div>`;
     for (const r of rows) {
       const v = verdictOf(r.n, r.avg);
       const color = r.a.cat ? catById(r.a.cat).color : "var(--blank)";
@@ -820,7 +820,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const blanks = state.template.flat().filter((t) => t.kind === "blank").length;
     const warn = [];
     if (anchors > 4) warn.push(`锚点有 ${anchors} 个，多了就变成任务清单了`);
-    if (!blanks) warn.push("还没有留白。没有留白的计划，很快就会让人觉得累");
+    if (!blanks) warn.push("还没有留白。没有留白的计划，很快会让人感到疲惫");
     if (warn.length) html += `<div class="banner plan"><span>${warn.join("；")}。</span></div>`;
     html += `<div class="days">`;
     state.template.forEach((d, i) => {

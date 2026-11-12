@@ -351,6 +351,8 @@ body.onboarding .tabbar { display: none; }
 .swipe.swiping .swipe-body { transition: none; }
 @media (prefers-reduced-motion: reduce) { .swipe-body { transition: none; } }
 .row.tappable { cursor: pointer; }
+.row-edit { border: 0; background: transparent; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.row-edit:hover .row-title { color: var(--anchor-ink); }
 .row-chev { color: var(--ink-3); font-size: 20px; line-height: 1; flex: none; }
 .detail-list { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .empty-state { color: var(--ink-3); padding-block: 18px; font-size: 14px; }
@@ -870,7 +872,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   function viewMenu() {
     const { map } = collect();
-    let html = header(`${pageTitle("我的生活菜单", "menu", "<p>一份只属于你的清单，活出你想要的人生吧。</p>")}
+    let html = header(`${pageTitle("我的生活菜单", "menu", "<p>一份只属于你的清单，活出你想要的人生吧。</p><p>点一下活动的名字，可以改名或换分类；点左边的图标，可以换图标。</p>")}
       <div class="head-actions"><button class="ghost go" data-act="open-library">从灵感库添加</button></div>`);
     if (!state.acts.some((a) => !a.hidden)) {
       html += `<div class="notice banner plan"><span class="notice-ico" aria-hidden="true">🌱</span><span class="notice-text">菜单还是空的。从灵感库挑几件想试试的事，或者在最下面添加。</span><button data-act="open-library">打开灵感库</button></div>`;
@@ -882,8 +884,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         ? `<button class="ghost armed" data-act="hide-act" data-id="${a.id}">确认删除</button>`
         : `<button class="icon-act" data-act="hide-act" data-id="${a.id}" aria-label="删除「${esc(a.name)}」" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`;
       return `<div class="row"><button class="ico" data-act="pick-icon" data-id="${a.id}" aria-label="换图标" title="换图标">${iconOf(a)}</button>
-        <div class="row-main"><div class="row-title">${esc(a.name)}</div>
-        <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}${a.anchor ? " · 已是锚点" : ""}</div></div>
+        <button class="row-main row-edit" data-act="edit-act" data-id="${a.id}" aria-label="编辑「${esc(a.name)}」"><div class="row-title">${esc(a.name)}</div>
+        <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}${a.anchor ? " · 已是锚点" : ""}</div></button>
         <div class="row-actions">${extra}${del}</div></div>`;
     };
     for (const c of CATS) {
@@ -1271,6 +1273,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     if (s.mode === "icon") { $sheet.innerHTML = iconSheet(s); return; }
     if (s.mode === "detail") { $sheet.innerHTML = detailSheet(s); return; }
     if (s.mode === "rec") { $sheet.innerHTML = recSheet(s); return; }
+    if (s.mode === "act") { $sheet.innerHTML = actSheet(s); return; }
     const d = s.draft;
     const isEntry = s.mode === "entry";
     const date = isEntry ? addDays(parseKey(ui.week), s.day) : null;
@@ -1367,6 +1370,23 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       </div>
       <div class="sheet-foot"><span></span>
         <div class="btn-row"><button class="ghost" data-act="rec-cancel">取消</button><button class="primary" data-act="rec-save">保存</button></div></div>
+    </div></div>`;
+  }
+
+  // Rename an activity or move it to another category.
+  function actSheet(s) {
+    const a = actById(s.id);
+    return `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="编辑活动">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2>编辑这件事</h2></div>
+      <div class="block"><label class="label" for="act-name">名字</label>
+        <input class="field" id="act-name" maxlength="60" value="${esc(s.name)}"></div>
+      <div class="block"><label class="label" for="act-cat">分类</label>
+        <select class="field" id="act-cat">${CATS.map((c) => `<option value="${c.id}" ${c.id === s.cat ? "selected" : ""}>${c.name}</option>`).join("")}</select>
+        ${s.cat === "rhythm" && !a.anchor ? `<p class="seg-hint" style="margin:0">放进日常节奏后，它会成为锚点。</p>` : ""}</div>
+      ${s.error ? `<p class="error-line" role="alert">${esc(s.error)}</p>` : ""}
+      <div class="sheet-foot"><span></span>
+        <div class="btn-row"><button class="ghost" data-act="close-sheet-btn">取消</button><button class="primary" data-act="act-save">保存</button></div></div>
     </div></div>`;
   }
 
@@ -1470,6 +1490,14 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     "toggle-info": (el) => {
       ui.info[el.dataset.key] = !ui.info[el.dataset.key];
       if (ui.sheet) { renderSheet(); return false; }
+    },
+    "edit-act": (el) => { const a = actById(el.dataset.id); ui.sheet = { mode: "act", id: a.id, name: a.name, cat: a.cat }; },
+    "act-save": () => {
+      const s = ui.sheet, a = actById(s.id), name = s.name.trim();
+      if (!name) { s.error = "名字不能为空"; renderSheet(); document.getElementById("act-name")?.focus(); return false; }
+      a.name = name;
+      if (s.cat !== a.cat) { a.cat = s.cat; if (s.cat === "rhythm") a.anchor = true; }
+      save(); ui.sheet = null; toast("改好了");
     },
     "pick-icon": (el) => { ui.sheet = { mode: "icon", id: el.dataset.id }; },
     "set-icon": (el) => {
@@ -1854,11 +1882,16 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   document.addEventListener("input", (ev) => {
     if (ev.target.id === "entry-note" && ui.sheet) ui.sheet.draft.note = ev.target.value;
     if (ev.target.id === "new-anchor-name" && ui.sheet) ui.sheet.newAnchorName = ev.target.value;
+    if (ev.target.id === "act-name" && ui.sheet) {
+      ui.sheet.name = ev.target.value;
+      if (ui.sheet.error) { ui.sheet.error = ""; document.querySelector(".sheet .error-line")?.remove(); }
+    }
     if (ev.target.id === "auth-email") ui.authEmail = ev.target.value;
     if (ev.target.id === "auth-pass") ui.authPass = ev.target.value;
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && ui.sheet) { closeSheet(); render(); }
+    if (ev.key === "Enter" && ev.target.id === "act-name") { ev.preventDefault(); if (actions["act-save"]() !== false) render(); return; }
     if (ev.key === "Enter" && ev.target.id === "new-anchor-name") { ev.preventDefault(); actions["create-anchor"](); return; }
     if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions[ui.sheet.mode === "rec" ? "rec-save" : "save-entry"](); render(); }
     if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches && ev.target.matches(".row.tappable")) { ev.preventDefault(); ev.target.click(); }
@@ -1885,6 +1918,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     save(); toast(cat === "rhythm" ? "已加入「日常节奏」，也是一个锚点" : `已加入「${catById(cat).name}」`); render();
   });
   document.addEventListener("change", (ev) => {
+    if (ev.target.id === "act-cat" && ui.sheet) { ui.sheet.cat = ev.target.value; renderSheet(); return; }
     if (ev.target.id !== "backup-file") return;
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;

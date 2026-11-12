@@ -103,6 +103,7 @@ button { cursor: pointer; }
 .brand { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 32px; }
 .brand-name { font: 900 17px/1.2 var(--serif); letter-spacing: .01em; color: var(--accent); white-space: nowrap; }
 .brand-sub { display: none; }
+.sign-off { margin: 28px 0 0; text-align: center; }
 .title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: 6px; min-height: 38px; }
 .title-row .acct { margin-left: auto; }
 .week-title { font: 600 clamp(24px, 6.6vw, 32px)/1.2 var(--serif); margin: 0; text-wrap: balance; }
@@ -799,9 +800,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return `<span class="sync-slot"><i class="sync-dot ${cls}"></i>${esc(text)}</span>`;
   }
 
-  function header(title, brand = false) {
+  function header(title) {
     return `<header class="top">
-      ${brand ? `<div class="brand"><span class="brand-name">Have a nice day~</span></div>` : ""}
       ${title}
     </header>`;
   }
@@ -835,7 +835,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <span>均分 <b>${rated.length ? avgOf(rated.map((e) => e.score)).toFixed(1) : "–"}</b></span>
         ${infoBtn("week")}
       </div>
-      ${infoPanel("week", `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>`)}`, true);
+      ${infoPanel("week", `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>`)}`);
 
     if (cloud.conflict) {
       html += `<div class="notice banner plan"><span class="notice-ico" aria-hidden="true">☁️</span><span class="notice-text">云端和这台设备上各有一份记录，选一份保留吧</span><button data-act="open-account">去选择</button></div>`;
@@ -862,6 +862,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
       </div>`;
     });
     html += `</div>`;
+    html += `<p class="sign-off"><span class="brand-name">Have a nice day~</span></p>`;
     return html;
   }
 

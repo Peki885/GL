@@ -334,6 +334,25 @@ body.onboarding .tabbar { display: none; }
 .quote:last-child { border-bottom: 0; }
 .quote p { margin: 0; font-family: var(--serif); font-weight: 600; }
 .quote .row-sub { display: flex; gap: 8px; flex-wrap: wrap; }
+.quote p.none { font-family: var(--sans); font-weight: 400; color: var(--ink-3); font-size: 14px; }
+/* swipe a row left (or tap it) to reveal its actions */
+.swipe { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.swipe:last-child { border-bottom: 0; }
+.swipe .quote { border-bottom: 0; }
+.swipe-actions { position: absolute; inset: 0 0 0 auto; width: 128px; display: flex; }
+.swipe-actions button { flex: 1; border: 0; font-size: 13px; font-weight: 500; padding: 0 4px; }
+.sw-edit { background: var(--surface-2); color: var(--ink); }
+.sw-del { background: var(--bad); color: var(--surface); }
+.swipe-body {
+  position: relative; background: var(--surface); transition: transform .18s ease-out;
+  touch-action: pan-y; cursor: pointer; -webkit-user-select: none; user-select: none;
+}
+.swipe.open .swipe-body { transform: translateX(-128px); }
+.swipe.swiping .swipe-body { transition: none; }
+@media (prefers-reduced-motion: reduce) { .swipe-body { transition: none; } }
+.row.tappable { cursor: pointer; }
+.row-chev { color: var(--ink-3); font-size: 20px; line-height: 1; flex: none; }
+.detail-list { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .empty-state { color: var(--ink-3); padding-block: 18px; font-size: 14px; }
 
 /* ---------- tabbar ---------- */
@@ -558,7 +577,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   /* ================= state ================= */
   let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme(),
-    info: {}, prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
+    info: {}, swipeOpen: null, prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
   applyTheme(ui.theme);
   let state = load();
   const hashTab = (location.hash || "").slice(1);
@@ -665,7 +684,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   /* ================= stats ================= */
   function collect() {
     const map = new Map();
-    const notes = [];
+    const notes = [], records = [];
     const scoredWeeks = new Set();
     let total = 0;
     for (const [wk, w] of Object.entries(state.weeks)) {
@@ -679,11 +698,21 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         map.get(key).push(e.score);
         scoredWeeks.add(wk);
         total++;
-        if (e.note) notes.push({ date, text: e.note, score: e.score, name: entryLabel(e) });
+        const rec = { wk, day: i, id: e.id, key, date, text: e.note || "", score: e.score, name: entryLabel(e) };
+        records.push(rec);
+        if (e.note) notes.push(rec);
       }));
     }
     notes.sort((a, b) => b.date - a.date);
-    return { map, notes, weeks: scoredWeeks.size, total };
+    records.sort((a, b) => b.date - a.date);
+    return { map, notes, records, weeks: scoredWeeks.size, total };
+  }
+  // One scored entry is addressed as "week|day|entryId".
+  const recKey = (r) => `${r.wk}|${r.day}|${r.id}`;
+  function findRec(k) {
+    const [wk, day, id] = k.split("|");
+    const d = state.weeks[wk] && state.weeks[wk].days[+day];
+    return d && d.find((e) => e.id === id);
   }
   function actStats(map, id) {
     const arr = map.get(id) || [];
@@ -885,7 +914,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const { map, notes, weeks, total } = collect();
     const allScores = [...map.values()].flat();
     const target = 4;
-    let html = header(pageTitle("我的生活回顾", "review", "<p>坚持 3–4 周后回头看：高分的留下或升级为锚点，低分的直接删掉。</p>"));
+    let html = header(pageTitle("我的生活回顾", "review", "<p>坚持 3–4 周后回头看：高分的留下或升级为锚点，低分的直接删掉。</p><p>点开一项活动，可以看它每一次的打分。把一条记录向左滑（或点一下），可以编辑或删除。</p>"));
     html += `<div class="stat-strip">
       <div class="stat"><b>${weeks}</b><span>记录的周数</span></div>
       <div class="stat"><b>${total}</b><span>打分次数</span></div>
@@ -913,23 +942,31 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
           action = `<button class="ghost ${armed ? "armed" : ""}" data-act="hide-act" data-id="${r.a.id}">${armed ? "确认删除" : "删掉"}</button>`;
         }
       }
-      html += `<div class="row">
+      html += `<div class="row tappable" data-act="open-detail" data-id="${r.a.id}" role="button" tabindex="0" aria-label="${esc(r.a.name)}的打分详情">
         <span class="avg">${r.avg.toFixed(1)}</span>
         <div class="row-main">
           <div class="row-title"><span class="row-ico" aria-hidden="true">${iconOf(r.a)}</span>${esc(r.a.name)}</div>
           <div class="row-sub"><span class="pips ${v.cls}">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= rounded ? "on" : ""}"></i>`).join("")}</span>
             &nbsp;<span class="mono">${r.n}</span> 次 &nbsp;<span class="verdict ${v.cls}">${v.text}</span></div>
-        </div>${action}</div>`;
+        </div>${action}<span class="row-chev" aria-hidden="true">›</span></div>`;
     }
     html += `</div></section>`;
 
     html += `<section class="section"><h2>我说过的「为什么」</h2><div class="card">`;
     if (!notes.length) html += `<div class="empty-state">打分时写一句话，之后会在这里看到。</div>`;
     for (const n of notes.slice(0, 20)) {
-      html += `<div class="quote"><p>“${esc(n.text)}”</p><div class="row-sub"><span>${esc(n.name)}</span><span class="mono">${md(n.date)} · ${n.score} 分</span></div></div>`;
+      html += swipeRow(n, `<div class="quote"><p>“${esc(n.text)}”</p><div class="row-sub"><span>${esc(n.name)}</span><span class="mono">${md(n.date)} · ${n.score} 分</span></div></div>`);
     }
     html += `</div></section>`;
     return html;
+  }
+
+  function swipeRow(r, inner) {
+    const k = recKey(r);
+    const armed = ui.armed === "note-del:" + k;
+    return `<div class="swipe ${ui.swipeOpen === k ? "open" : ""}" data-key="${k}">
+      <div class="swipe-actions"><button class="sw-edit" data-act="rec-edit" data-key="${k}">编辑</button><button class="sw-del" data-act="note-del" data-key="${k}">${armed ? "确认删除" : "删除"}</button></div>
+      <div class="swipe-body" data-act="swipe-toggle" data-key="${k}">${inner}</div></div>`;
   }
 
   function viewRhythm() {
@@ -1232,6 +1269,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     if (s.mode === "promote") { $sheet.innerHTML = promoteSheet(s); return; }
     if (s.mode === "library") { $sheet.innerHTML = librarySheet(); return; }
     if (s.mode === "icon") { $sheet.innerHTML = iconSheet(s); return; }
+    if (s.mode === "detail") { $sheet.innerHTML = detailSheet(s); return; }
+    if (s.mode === "rec") { $sheet.innerHTML = recSheet(s); return; }
     const d = s.draft;
     const isEntry = s.mode === "entry";
     const date = isEntry ? addDays(parseKey(ui.week), s.day) : null;
@@ -1294,6 +1333,41 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <div class="btn-row"><button class="ghost" data-act="close-sheet-btn">取消</button><button class="primary" data-act="save-entry">保存</button></div>
       </div></div></div>`;
     $sheet.innerHTML = html;
+  }
+
+  // Every score given to one activity, newest first.
+  function detailSheet(s) {
+    const { records } = collect();
+    const mine = records.filter((r) => r.key === s.id);
+    const a = s.id === "__blank" ? { name: "留白", icon: "🌙" } : (actById(s.id) || { name: "（已删除）", icon: "·" });
+    let html = `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="打分详情">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2><span aria-hidden="true">${iconOf(a)}</span> ${esc(a.name)}</h2></div>
+      <p class="lead" style="margin-top:-8px">${mine.length ? `打过 <b>${mine.length}</b> 次分 · 均分 <b>${avgOf(mine.map((r) => r.score)).toFixed(1)}</b>` : "还没有打分记录。"}</p>`;
+    if (mine.length) {
+      html += `<div class="detail-list">${mine.map((r) => swipeRow(r, `<div class="quote">
+        ${r.text ? `<p>“${esc(r.text)}”</p>` : `<p class="none">这次没写为什么</p>`}
+        <div class="row-sub"><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= r.score ? "on" : ""}"></i>`).join("")}</span>
+          <span class="mono">${r.score} 分</span><span class="mono">${md(r.date)} ${DAYS[r.day]}</span></div></div>`)).join("")}</div>`;
+    }
+    html += `<div class="sheet-foot"><span></span><button class="primary" data-act="close-sheet-btn">完成</button></div></div></div>`;
+    return html;
+  }
+
+  // Edit one record's score and its "why".
+  function recSheet(s) {
+    const e = findRec(s.key), d = s.draft;
+    const [wk, day] = s.key.split("|");
+    return `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="编辑打分">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2><span aria-hidden="true">${entryIcon(e)}</span> ${esc(entryLabel(e))}</h2><span class="row-sub">${md(addDays(parseKey(wk), +day))} ${DAYS[+day]}</span></div>
+      <div class="block"><span class="label">做完之后我有多开心？</span>
+        <div class="scores">${[1, 2, 3, 4, 5].map((n) => `<button class="score" data-act="score" data-n="${n}" aria-pressed="${d.score === n}"><b>${n}</b><span>${SCORE_WORDS[n]}</span></button>`).join("")}</div>
+        <input class="field" id="entry-note" placeholder="一句话：为什么？" maxlength="120" value="${esc(d.note)}">
+      </div>
+      <div class="sheet-foot"><span></span>
+        <div class="btn-row"><button class="ghost" data-act="rec-cancel">取消</button><button class="primary" data-act="rec-save">保存</button></div></div>
+    </div></div>`;
   }
 
   function iconSheet(s) {
@@ -1365,6 +1439,34 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     "start-sample": () => { state = sampleState(); ui.onboarding = false; save(false); goTab("week"); },
     "start-empty": () => { state = emptyState(); ui.onboarding = false; save(false); goTab("menu"); },
     "start-login": () => { state = emptyState(); ui.onboarding = false; save(false); ui.prevTab = "week"; goTab("account"); },
+    "open-detail": (el) => { ui.sheet = { mode: "detail", id: el.dataset.id }; ui.swipeOpen = null; },
+    "swipe-toggle": (el) => { ui.swipeOpen = ui.swipeOpen === el.dataset.key ? null : el.dataset.key; },
+    "rec-edit": (el) => {
+      const e = findRec(el.dataset.key);
+      if (!e) return;
+      const back = ui.sheet && ui.sheet.mode === "detail" ? ui.sheet : null;
+      ui.sheet = { mode: "rec", key: el.dataset.key, back, draft: { score: e.score, note: e.note || "" } };
+      ui.swipeOpen = null;
+    },
+    "rec-save": () => {
+      const s = ui.sheet, e = findRec(s.key);
+      if (e) { e.score = s.draft.score; e.note = s.draft.note.trim(); save(); toast("改好了"); }
+      ui.sheet = s.back;
+    },
+    "rec-cancel": () => { ui.sheet = ui.sheet.back; },
+    // In the detail sheet a row is one score, so deleting removes that score;
+    // in the "why" list a row is the sentence, so only the sentence goes.
+    "note-del": (el) => {
+      const k = el.dataset.key;
+      if (!arm("note-del:" + k)) return false;
+      const e = findRec(k);
+      if (e) {
+        if (ui.sheet && ui.sheet.mode === "detail") { e.score = null; e.note = ""; toast("已删除这次打分"); }
+        else { e.note = ""; toast("已删掉这句话，分数还在"); }
+        save();
+      }
+      ui.swipeOpen = null;
+    },
     "toggle-info": (el) => {
       ui.info[el.dataset.key] = !ui.info[el.dataset.key];
       if (ui.sheet) { renderSheet(); return false; }
@@ -1573,7 +1675,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   }
 
   function goTab(t) {
-    ui.tab = t; ui.armed = null;
+    ui.tab = t; ui.armed = null; ui.swipeOpen = null;
     try { history.replaceState(null, "", "#" + t); } catch (e) { /* ignore */ }
     window.scrollTo(0, 0);
   }
@@ -1588,6 +1690,39 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     ui.sheet = null; ui.armed = null;
     cloud.applyPending();
   }
+
+  /* ================= swipe to reveal ================= */
+  const SWIPE_W = 128;
+  const swipe = { st: null, just: false };
+  document.addEventListener("pointerdown", (ev) => {
+    const body = ev.target.closest(".swipe-body");
+    if (!body || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    const wrap = body.parentNode;
+    swipe.st = { body, wrap, x0: ev.clientX, y0: ev.clientY, base: wrap.classList.contains("open") ? -SWIPE_W : 0, on: false, x: 0 };
+  });
+  document.addEventListener("pointermove", (ev) => {
+    const st = swipe.st;
+    if (!st) return;
+    const dx = ev.clientX - st.x0, dy = ev.clientY - st.y0;
+    if (!st.on) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) { st.on = true; st.wrap.classList.add("swiping"); }
+      else { if (Math.abs(dy) > 10) swipe.st = null; return; } // vertical move: let the page scroll
+    }
+    st.x = Math.max(-SWIPE_W, Math.min(0, st.base + dx));
+    st.body.style.transform = `translateX(${st.x}px)`;
+  });
+  function endSwipe(commit) {
+    const st = swipe.st;
+    swipe.st = null;
+    if (!st || !st.on) return;
+    swipe.just = true;
+    setTimeout(() => { swipe.just = false; }, 60);
+    if (commit) ui.swipeOpen = st.x < -SWIPE_W / 2 ? st.wrap.dataset.key : null;
+    ui.armed = null;
+    render();
+  }
+  document.addEventListener("pointerup", () => endSwipe(true));
+  document.addEventListener("pointercancel", () => endSwipe(false));
 
   /* ================= drag & drop ================= */
   // Press and hold a chip (or press and move with a mouse) to drag it to another day or position.
@@ -1699,6 +1834,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   document.addEventListener("pointercancel", () => endDrag(false));
 
   document.addEventListener("click", (ev) => {
+    if (swipe.just) { swipe.just = false; if (ev.target.closest(".swipe")) return; }
     // the click that ends a drag should not also open the chip
     if (drag.justDropped && ev.target.closest(".chip")) { drag.justDropped = false; ev.preventDefault(); ev.stopPropagation(); return; }
     const tab = ev.target.closest(".tab");
@@ -1710,7 +1846,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const name = el.dataset.act;
     const fn = actions[name];
     if (!fn) return;
-    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset", "keep-local", "logout"].includes(name);
+    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset", "keep-local", "logout", "note-del"].includes(name);
     if (!keepArm) ui.armed = null;
     const res = fn(el, ev);
     if (res !== false) render();
@@ -1724,7 +1860,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && ui.sheet) { closeSheet(); render(); }
     if (ev.key === "Enter" && ev.target.id === "new-anchor-name") { ev.preventDefault(); actions["create-anchor"](); return; }
-    if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions["save-entry"](); render(); }
+    if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions[ui.sheet.mode === "rec" ? "rec-save" : "save-entry"](); render(); }
+    if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches && ev.target.matches(".row.tappable")) { ev.preventDefault(); ev.target.click(); }
   });
   document.addEventListener("submit", (ev) => {
     if (ev.target.id === "auth-form") {

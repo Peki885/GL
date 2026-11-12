@@ -103,7 +103,8 @@ button { cursor: pointer; }
 .brand { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 32px; }
 .brand-name { font: 900 17px/1.2 var(--serif); letter-spacing: .01em; color: var(--accent); white-space: nowrap; }
 .brand-sub { display: none; }
-.title-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: 6px; min-height: 38px; }
+.title-row .acct { margin-left: auto; }
 .week-title { font: 600 clamp(24px, 6.6vw, 32px)/1.2 var(--serif); margin: 0; text-wrap: balance; }
 .week-nav { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .week-nav .week-title { flex: 1; }
@@ -787,7 +788,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return `<button class="info-btn" data-act="toggle-info" data-key="${key}" aria-expanded="${!!ui.info[key]}" aria-label="说明">?</button>`;
   }
   const infoPanel = (key, inner) => (ui.info[key] ? `<div class="info-text">${inner}</div>` : "");
-  const pageTitle = (title, key, inner) => `<div class="title-row"><h1 class="week-title">${title}</h1>${infoBtn(key)}</div>${infoPanel(key, inner)}`;
+  // Pages other than 本周 carry no brand line, so the account button sits beside the title.
+  const pageTitle = (title, key, inner) => `<div class="title-row"><h1 class="week-title">${title}</h1>${infoBtn(key)}${acctButton()}</div>${infoPanel(key, inner)}`;
 
   function acctButton() {
     return `<button class="acct" data-act="open-account">${cloud.user ? syncBadge() : "登录 · 云端同步"}</button>`;
@@ -797,9 +799,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return `<span class="sync-slot"><i class="sync-dot ${cls}"></i>${esc(text)}</span>`;
   }
 
-  function header(title, sub) {
+  function header(title, brand = false) {
     return `<header class="top">
-      <div class="brand"><span class="brand-name">Have a nice day~</span>${acctButton()}</div>
+      ${brand ? `<div class="brand"><span class="brand-name">Have a nice day~</span>${acctButton()}</div>` : ""}
       ${title}
     </header>`;
   }
@@ -833,7 +835,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <span>均分 <b>${rated.length ? avgOf(rated.map((e) => e.score)).toFixed(1) : "–"}</b></span>
         ${infoBtn("week")}
       </div>
-      ${infoPanel("week", `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>`)}`);
+      ${infoPanel("week", `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>`)}`, true);
 
     if (cloud.conflict) {
       html += `<div class="notice banner plan"><span class="notice-ico" aria-hidden="true">☁️</span><span class="notice-text">云端和这台设备上各有一份记录，选一份保留吧</span><button data-act="open-account">去选择</button></div>`;

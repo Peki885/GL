@@ -788,8 +788,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return `<button class="info-btn" data-act="toggle-info" data-key="${key}" aria-expanded="${!!ui.info[key]}" aria-label="说明">?</button>`;
   }
   const infoPanel = (key, inner) => (ui.info[key] ? `<div class="info-text">${inner}</div>` : "");
-  // Pages other than 本周 carry no brand line, so the account button sits beside the title.
-  const pageTitle = (title, key, inner) => `<div class="title-row"><h1 class="week-title">${title}</h1>${infoBtn(key)}${acctButton()}</div>${infoPanel(key, inner)}`;
+  // The account button lives on the 节奏 page only, beside its title.
+  const pageTitle = (title, key, inner, acct = false) => `<div class="title-row"><h1 class="week-title">${title}</h1>${infoBtn(key)}${acct ? acctButton() : ""}</div>${infoPanel(key, inner)}`;
 
   function acctButton() {
     return `<button class="acct" data-act="open-account">${cloud.user ? syncBadge() : "登录 · 云端同步"}</button>`;
@@ -801,7 +801,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   function header(title, brand = false) {
     return `<header class="top">
-      ${brand ? `<div class="brand"><span class="brand-name">Have a nice day~</span>${acctButton()}</div>` : ""}
+      ${brand ? `<div class="brand"><span class="brand-name">Have a nice day~</span></div>` : ""}
       ${title}
     </header>`;
   }
@@ -974,7 +974,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   }
 
   function viewRhythm() {
-    let html = header(pageTitle("我的一周节奏", "rhythm", "<p>有固定的期待，有随性的选择，也有空白的余地。你的节奏，由你来定。新的一周，都从这里开始。</p><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>"));
+    let html = header(pageTitle("我的一周节奏", "rhythm", "<p>有固定的期待，有随性的选择，也有空白的余地。你的节奏，由你来定。新的一周，都从这里开始。</p><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>", true));
     const blanks = state.template.flat().filter((t) => t.kind === "blank").length;
     const warn = [];
     const load = anchorLoad(state.template);

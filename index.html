@@ -103,7 +103,8 @@ button { cursor: pointer; }
 .brand { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 32px; }
 .brand-name { font: 900 17px/1.2 var(--serif); letter-spacing: .01em; color: var(--accent); white-space: nowrap; }
 .brand-sub { display: none; }
-.title-row { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: 6px; min-height: 38px; }
+.title-row .acct { margin-left: auto; }
 .week-title { font: 600 clamp(24px, 6.6vw, 32px)/1.2 var(--serif); margin: 0; text-wrap: balance; }
 .week-nav { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 .week-nav .week-title { flex: 1; }
@@ -334,6 +335,27 @@ body.onboarding .tabbar { display: none; }
 .quote:last-child { border-bottom: 0; }
 .quote p { margin: 0; font-family: var(--serif); font-weight: 600; }
 .quote .row-sub { display: flex; gap: 8px; flex-wrap: wrap; }
+.quote p.none { font-family: var(--sans); font-weight: 400; color: var(--ink-3); font-size: 14px; }
+/* swipe a row left (or tap it) to reveal its actions */
+.swipe { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+.swipe:last-child { border-bottom: 0; }
+.swipe .quote { border-bottom: 0; }
+.swipe-actions { position: absolute; inset: 0 0 0 auto; width: 128px; display: flex; }
+.swipe-actions button { flex: 1; border: 0; font-size: 13px; font-weight: 500; padding: 0 4px; }
+.sw-edit { background: var(--surface-2); color: var(--ink); }
+.sw-del { background: var(--bad); color: var(--surface); }
+.swipe-body {
+  position: relative; background: var(--surface); transition: transform .18s ease-out;
+  touch-action: pan-y; cursor: pointer; -webkit-user-select: none; user-select: none;
+}
+.swipe.open .swipe-body { transform: translateX(-128px); }
+.swipe.swiping .swipe-body { transition: none; }
+@media (prefers-reduced-motion: reduce) { .swipe-body { transition: none; } }
+.row.tappable { cursor: pointer; }
+.row-edit { border: 0; background: transparent; padding: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.row-edit:hover .row-title { color: var(--anchor-ink); }
+.row-chev { color: var(--ink-3); font-size: 20px; line-height: 1; flex: none; }
+.detail-list { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .empty-state { color: var(--ink-3); padding-block: 18px; font-size: 14px; }
 
 /* ---------- tabbar ---------- */
@@ -558,7 +580,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   /* ================= state ================= */
   let ui = { tab: "week", week: thisWeekKey(), armed: null, sheet: null, backup: "", theme: loadTheme(),
-    info: {}, prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
+    info: {}, swipeOpen: null, prevTab: "week", authMode: "login", authEmail: "", authPass: "", authError: "", authBusy: false };
   applyTheme(ui.theme);
   let state = load();
   const hashTab = (location.hash || "").slice(1);
@@ -665,7 +687,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   /* ================= stats ================= */
   function collect() {
     const map = new Map();
-    const notes = [];
+    const notes = [], records = [];
     const scoredWeeks = new Set();
     let total = 0;
     for (const [wk, w] of Object.entries(state.weeks)) {
@@ -679,11 +701,21 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         map.get(key).push(e.score);
         scoredWeeks.add(wk);
         total++;
-        if (e.note) notes.push({ date, text: e.note, score: e.score, name: entryLabel(e) });
+        const rec = { wk, day: i, id: e.id, key, date, text: e.note || "", score: e.score, name: entryLabel(e) };
+        records.push(rec);
+        if (e.note) notes.push(rec);
       }));
     }
     notes.sort((a, b) => b.date - a.date);
-    return { map, notes, weeks: scoredWeeks.size, total };
+    records.sort((a, b) => b.date - a.date);
+    return { map, notes, records, weeks: scoredWeeks.size, total };
+  }
+  // One scored entry is addressed as "week|day|entryId".
+  const recKey = (r) => `${r.wk}|${r.day}|${r.id}`;
+  function findRec(k) {
+    const [wk, day, id] = k.split("|");
+    const d = state.weeks[wk] && state.weeks[wk].days[+day];
+    return d && d.find((e) => e.id === id);
   }
   function actStats(map, id) {
     const arr = map.get(id) || [];
@@ -756,7 +788,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return `<button class="info-btn" data-act="toggle-info" data-key="${key}" aria-expanded="${!!ui.info[key]}" aria-label="说明">?</button>`;
   }
   const infoPanel = (key, inner) => (ui.info[key] ? `<div class="info-text">${inner}</div>` : "");
-  const pageTitle = (title, key, inner) => `<div class="title-row"><h1 class="week-title">${title}</h1>${infoBtn(key)}</div>${infoPanel(key, inner)}`;
+  // The account button lives on the 节奏 page only, beside its title.
+  const pageTitle = (title, key, inner, acct = false) => `<div class="title-row"><h1 class="week-title">${title}</h1>${infoBtn(key)}${acct ? acctButton() : ""}</div>${infoPanel(key, inner)}`;
 
   function acctButton() {
     return `<button class="acct" data-act="open-account">${cloud.user ? syncBadge() : "登录 · 云端同步"}</button>`;
@@ -766,9 +799,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     return `<span class="sync-slot"><i class="sync-dot ${cls}"></i>${esc(text)}</span>`;
   }
 
-  function header(title, sub) {
+  function header(title, brand = false) {
     return `<header class="top">
-      <div class="brand"><span class="brand-name">Have a nice day~</span>${acctButton()}</div>
+      ${brand ? `<div class="brand"><span class="brand-name">Have a nice day~</span></div>` : ""}
       ${title}
     </header>`;
   }
@@ -802,7 +835,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <span>均分 <b>${rated.length ? avgOf(rated.map((e) => e.score)).toFixed(1) : "–"}</b></span>
         ${infoBtn("week")}
       </div>
-      ${infoPanel("week", `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>`)}`);
+      ${infoPanel("week", `<div class="legend"><span><i class="sw anchor"></i>锚点</span><span><i class="sw flex"></i>弹性</span><span><i class="sw blank"></i>留白</span><span>数字 = 做完后的开心分</span></div><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>`)}`, true);
 
     if (cloud.conflict) {
       html += `<div class="notice banner plan"><span class="notice-ico" aria-hidden="true">☁️</span><span class="notice-text">云端和这台设备上各有一份记录，选一份保留吧</span><button data-act="open-account">去选择</button></div>`;
@@ -841,7 +874,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
 
   function viewMenu() {
     const { map } = collect();
-    let html = header(`${pageTitle("我的生活菜单", "menu", "<p>一份只属于你的清单，活出你想要的人生吧。</p>")}
+    let html = header(`${pageTitle("我的生活菜单", "menu", "<p>一份只属于你的清单，活出你想要的人生吧。</p><p>点一下活动的名字，可以改名或换分类；点左边的图标，可以换图标。</p>")}
       <div class="head-actions"><button class="ghost go" data-act="open-library">从灵感库添加</button></div>`);
     if (!state.acts.some((a) => !a.hidden)) {
       html += `<div class="notice banner plan"><span class="notice-ico" aria-hidden="true">🌱</span><span class="notice-text">菜单还是空的。从灵感库挑几件想试试的事，或者在最下面添加。</span><button data-act="open-library">打开灵感库</button></div>`;
@@ -853,8 +886,8 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         ? `<button class="ghost armed" data-act="hide-act" data-id="${a.id}">确认删除</button>`
         : `<button class="icon-act" data-act="hide-act" data-id="${a.id}" aria-label="删除「${esc(a.name)}」" title="删除"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>`;
       return `<div class="row"><button class="ico" data-act="pick-icon" data-id="${a.id}" aria-label="换图标" title="换图标">${iconOf(a)}</button>
-        <div class="row-main"><div class="row-title">${esc(a.name)}</div>
-        <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}${a.anchor ? " · 已是锚点" : ""}</div></div>
+        <button class="row-main row-edit" data-act="edit-act" data-id="${a.id}" aria-label="编辑「${esc(a.name)}」"><div class="row-title">${esc(a.name)}</div>
+        <div class="row-sub">${s.n ? `做过 <span class="mono">${s.n}</span> 次 · 均分 <span class="mono">${s.avg.toFixed(1)}</span>` : "还没试过"}${a.anchor ? " · 已是锚点" : ""}</div></button>
         <div class="row-actions">${extra}${del}</div></div>`;
     };
     for (const c of CATS) {
@@ -885,7 +918,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const { map, notes, weeks, total } = collect();
     const allScores = [...map.values()].flat();
     const target = 4;
-    let html = header(pageTitle("我的生活回顾", "review", "<p>坚持 3–4 周后回头看：高分的留下或升级为锚点，低分的直接删掉。</p>"));
+    let html = header(pageTitle("我的生活回顾", "review", "<p>坚持 3–4 周后回头看：高分的留下或升级为锚点，低分的直接删掉。</p><p>点开一项活动，可以看它每一次的打分。把一条记录向左滑（或点一下），可以编辑或删除。</p>"));
     html += `<div class="stat-strip">
       <div class="stat"><b>${weeks}</b><span>记录的周数</span></div>
       <div class="stat"><b>${total}</b><span>打分次数</span></div>
@@ -913,27 +946,35 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
           action = `<button class="ghost ${armed ? "armed" : ""}" data-act="hide-act" data-id="${r.a.id}">${armed ? "确认删除" : "删掉"}</button>`;
         }
       }
-      html += `<div class="row">
+      html += `<div class="row tappable" data-act="open-detail" data-id="${r.a.id}" role="button" tabindex="0" aria-label="${esc(r.a.name)}的打分详情">
         <span class="avg">${r.avg.toFixed(1)}</span>
         <div class="row-main">
           <div class="row-title"><span class="row-ico" aria-hidden="true">${iconOf(r.a)}</span>${esc(r.a.name)}</div>
           <div class="row-sub"><span class="pips ${v.cls}">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= rounded ? "on" : ""}"></i>`).join("")}</span>
             &nbsp;<span class="mono">${r.n}</span> 次 &nbsp;<span class="verdict ${v.cls}">${v.text}</span></div>
-        </div>${action}</div>`;
+        </div>${action}<span class="row-chev" aria-hidden="true">›</span></div>`;
     }
     html += `</div></section>`;
 
     html += `<section class="section"><h2>我说过的「为什么」</h2><div class="card">`;
     if (!notes.length) html += `<div class="empty-state">打分时写一句话，之后会在这里看到。</div>`;
     for (const n of notes.slice(0, 20)) {
-      html += `<div class="quote"><p>“${esc(n.text)}”</p><div class="row-sub"><span>${esc(n.name)}</span><span class="mono">${md(n.date)} · ${n.score} 分</span></div></div>`;
+      html += swipeRow(n, `<div class="quote"><p>“${esc(n.text)}”</p><div class="row-sub"><span>${esc(n.name)}</span><span class="mono">${md(n.date)} · ${n.score} 分</span></div></div>`);
     }
     html += `</div></section>`;
     return html;
   }
 
+  function swipeRow(r, inner) {
+    const k = recKey(r);
+    const armed = ui.armed === "note-del:" + k;
+    return `<div class="swipe ${ui.swipeOpen === k ? "open" : ""}" data-key="${k}">
+      <div class="swipe-actions"><button class="sw-edit" data-act="rec-edit" data-key="${k}">编辑</button><button class="sw-del" data-act="note-del" data-key="${k}">${armed ? "确认删除" : "删除"}</button></div>
+      <div class="swipe-body" data-act="swipe-toggle" data-key="${k}">${inner}</div></div>`;
+  }
+
   function viewRhythm() {
-    let html = header(pageTitle("我的一周节奏", "rhythm", "<p>有固定的期待，有随性的选择，也有空白的余地。你的节奏，由你来定。新的一周，都从这里开始。</p><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>"));
+    let html = header(pageTitle("我的一周节奏", "rhythm", "<p>有固定的期待，有随性的选择，也有空白的余地。你的节奏，由你来定。新的一周，都从这里开始。</p><p>长按小块，可以把它拖到别的日子，或者调整先后顺序。</p>", true));
     const blanks = state.template.flat().filter((t) => t.kind === "blank").length;
     const warn = [];
     const load = anchorLoad(state.template);
@@ -1232,6 +1273,9 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     if (s.mode === "promote") { $sheet.innerHTML = promoteSheet(s); return; }
     if (s.mode === "library") { $sheet.innerHTML = librarySheet(); return; }
     if (s.mode === "icon") { $sheet.innerHTML = iconSheet(s); return; }
+    if (s.mode === "detail") { $sheet.innerHTML = detailSheet(s); return; }
+    if (s.mode === "rec") { $sheet.innerHTML = recSheet(s); return; }
+    if (s.mode === "act") { $sheet.innerHTML = actSheet(s); return; }
     const d = s.draft;
     const isEntry = s.mode === "entry";
     const date = isEntry ? addDays(parseKey(ui.week), s.day) : null;
@@ -1294,6 +1338,58 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
         <div class="btn-row"><button class="ghost" data-act="close-sheet-btn">取消</button><button class="primary" data-act="save-entry">保存</button></div>
       </div></div></div>`;
     $sheet.innerHTML = html;
+  }
+
+  // Every score given to one activity, newest first.
+  function detailSheet(s) {
+    const { records } = collect();
+    const mine = records.filter((r) => r.key === s.id);
+    const a = s.id === "__blank" ? { name: "留白", icon: "🌙" } : (actById(s.id) || { name: "（已删除）", icon: "·" });
+    let html = `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="打分详情">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2><span aria-hidden="true">${iconOf(a)}</span> ${esc(a.name)}</h2></div>
+      <p class="lead" style="margin-top:-8px">${mine.length ? `打过 <b>${mine.length}</b> 次分 · 均分 <b>${avgOf(mine.map((r) => r.score)).toFixed(1)}</b>` : "还没有打分记录。"}</p>`;
+    if (mine.length) {
+      html += `<div class="detail-list">${mine.map((r) => swipeRow(r, `<div class="quote">
+        ${r.text ? `<p>“${esc(r.text)}”</p>` : `<p class="none">这次没写为什么</p>`}
+        <div class="row-sub"><span class="pips">${[1, 2, 3, 4, 5].map((n) => `<i class="${n <= r.score ? "on" : ""}"></i>`).join("")}</span>
+          <span class="mono">${r.score} 分</span><span class="mono">${md(r.date)} ${DAYS[r.day]}</span></div></div>`)).join("")}</div>`;
+    }
+    html += `<div class="sheet-foot"><span></span><button class="primary" data-act="close-sheet-btn">完成</button></div></div></div>`;
+    return html;
+  }
+
+  // Edit one record's score and its "why".
+  function recSheet(s) {
+    const e = findRec(s.key), d = s.draft;
+    const [wk, day] = s.key.split("|");
+    return `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="编辑打分">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2><span aria-hidden="true">${entryIcon(e)}</span> ${esc(entryLabel(e))}</h2><span class="row-sub">${md(addDays(parseKey(wk), +day))} ${DAYS[+day]}</span></div>
+      <div class="block"><span class="label">做完之后我有多开心？</span>
+        <div class="scores">${[1, 2, 3, 4, 5].map((n) => `<button class="score" data-act="score" data-n="${n}" aria-pressed="${d.score === n}"><b>${n}</b><span>${SCORE_WORDS[n]}</span></button>`).join("")}</div>
+        <input class="field" id="entry-note" placeholder="一句话：为什么？" maxlength="120" value="${esc(d.note)}">
+      </div>
+      <div class="sheet-foot"><span></span>
+        <div class="btn-row"><button class="ghost" data-act="rec-cancel">取消</button><button class="primary" data-act="rec-save">保存</button></div></div>
+    </div></div>`;
+  }
+
+  // Rename an activity or move it to another category.
+  function actSheet(s) {
+    const a = actById(s.id);
+    return `<div class="scrim" data-act="close-sheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="编辑活动">
+      <div class="grab"></div>
+      <div class="sheet-head"><h2>编辑这件事</h2></div>
+      <div class="block"><label class="label" for="act-name">名字</label>
+        <input class="field" id="act-name" maxlength="60" value="${esc(s.name)}"></div>
+      <div class="block"><label class="label" for="act-cat">分类</label>
+        <select class="field" id="act-cat">${CATS.map((c) => `<option value="${c.id}" ${c.id === s.cat ? "selected" : ""}>${c.name}</option>`).join("")}</select>
+        ${s.cat === "rhythm" && !a.anchor ? `<p class="seg-hint" style="margin:0">放进日常节奏后，它会成为锚点。</p>` : ""}</div>
+      ${s.error ? `<p class="error-line" role="alert">${esc(s.error)}</p>` : ""}
+      <div class="sheet-foot"><span></span>
+        <div class="btn-row"><button class="ghost" data-act="close-sheet-btn">取消</button><button class="primary" data-act="act-save">保存</button></div></div>
+    </div></div>`;
   }
 
   function iconSheet(s) {
@@ -1365,9 +1461,45 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     "start-sample": () => { state = sampleState(); ui.onboarding = false; save(false); goTab("week"); },
     "start-empty": () => { state = emptyState(); ui.onboarding = false; save(false); goTab("menu"); },
     "start-login": () => { state = emptyState(); ui.onboarding = false; save(false); ui.prevTab = "week"; goTab("account"); },
+    "open-detail": (el) => { ui.sheet = { mode: "detail", id: el.dataset.id }; ui.swipeOpen = null; },
+    "swipe-toggle": (el) => { ui.swipeOpen = ui.swipeOpen === el.dataset.key ? null : el.dataset.key; },
+    "rec-edit": (el) => {
+      const e = findRec(el.dataset.key);
+      if (!e) return;
+      const back = ui.sheet && ui.sheet.mode === "detail" ? ui.sheet : null;
+      ui.sheet = { mode: "rec", key: el.dataset.key, back, draft: { score: e.score, note: e.note || "" } };
+      ui.swipeOpen = null;
+    },
+    "rec-save": () => {
+      const s = ui.sheet, e = findRec(s.key);
+      if (e) { e.score = s.draft.score; e.note = s.draft.note.trim(); save(); toast("改好了"); }
+      ui.sheet = s.back;
+    },
+    "rec-cancel": () => { ui.sheet = ui.sheet.back; },
+    // In the detail sheet a row is one score, so deleting removes that score;
+    // in the "why" list a row is the sentence, so only the sentence goes.
+    "note-del": (el) => {
+      const k = el.dataset.key;
+      if (!arm("note-del:" + k)) return false;
+      const e = findRec(k);
+      if (e) {
+        if (ui.sheet && ui.sheet.mode === "detail") { e.score = null; e.note = ""; toast("已删除这次打分"); }
+        else { e.note = ""; toast("已删掉这句话，分数还在"); }
+        save();
+      }
+      ui.swipeOpen = null;
+    },
     "toggle-info": (el) => {
       ui.info[el.dataset.key] = !ui.info[el.dataset.key];
       if (ui.sheet) { renderSheet(); return false; }
+    },
+    "edit-act": (el) => { const a = actById(el.dataset.id); ui.sheet = { mode: "act", id: a.id, name: a.name, cat: a.cat }; },
+    "act-save": () => {
+      const s = ui.sheet, a = actById(s.id), name = s.name.trim();
+      if (!name) { s.error = "名字不能为空"; renderSheet(); document.getElementById("act-name")?.focus(); return false; }
+      a.name = name;
+      if (s.cat !== a.cat) { a.cat = s.cat; if (s.cat === "rhythm") a.anchor = true; }
+      save(); ui.sheet = null; toast("改好了");
     },
     "pick-icon": (el) => { ui.sheet = { mode: "icon", id: el.dataset.id }; },
     "set-icon": (el) => {
@@ -1573,7 +1705,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   }
 
   function goTab(t) {
-    ui.tab = t; ui.armed = null;
+    ui.tab = t; ui.armed = null; ui.swipeOpen = null;
     try { history.replaceState(null, "", "#" + t); } catch (e) { /* ignore */ }
     window.scrollTo(0, 0);
   }
@@ -1588,6 +1720,39 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     ui.sheet = null; ui.armed = null;
     cloud.applyPending();
   }
+
+  /* ================= swipe to reveal ================= */
+  const SWIPE_W = 128;
+  const swipe = { st: null, just: false };
+  document.addEventListener("pointerdown", (ev) => {
+    const body = ev.target.closest(".swipe-body");
+    if (!body || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    const wrap = body.parentNode;
+    swipe.st = { body, wrap, x0: ev.clientX, y0: ev.clientY, base: wrap.classList.contains("open") ? -SWIPE_W : 0, on: false, x: 0 };
+  });
+  document.addEventListener("pointermove", (ev) => {
+    const st = swipe.st;
+    if (!st) return;
+    const dx = ev.clientX - st.x0, dy = ev.clientY - st.y0;
+    if (!st.on) {
+      if (Math.abs(dx) > 8 && Math.abs(dx) > Math.abs(dy) * 1.2) { st.on = true; st.wrap.classList.add("swiping"); }
+      else { if (Math.abs(dy) > 10) swipe.st = null; return; } // vertical move: let the page scroll
+    }
+    st.x = Math.max(-SWIPE_W, Math.min(0, st.base + dx));
+    st.body.style.transform = `translateX(${st.x}px)`;
+  });
+  function endSwipe(commit) {
+    const st = swipe.st;
+    swipe.st = null;
+    if (!st || !st.on) return;
+    swipe.just = true;
+    setTimeout(() => { swipe.just = false; }, 60);
+    if (commit) ui.swipeOpen = st.x < -SWIPE_W / 2 ? st.wrap.dataset.key : null;
+    ui.armed = null;
+    render();
+  }
+  document.addEventListener("pointerup", () => endSwipe(true));
+  document.addEventListener("pointercancel", () => endSwipe(false));
 
   /* ================= drag & drop ================= */
   // Press and hold a chip (or press and move with a mouse) to drag it to another day or position.
@@ -1699,6 +1864,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   document.addEventListener("pointercancel", () => endDrag(false));
 
   document.addEventListener("click", (ev) => {
+    if (swipe.just) { swipe.just = false; if (ev.target.closest(".swipe")) return; }
     // the click that ends a drag should not also open the chip
     if (drag.justDropped && ev.target.closest(".chip")) { drag.justDropped = false; ev.preventDefault(); ev.stopPropagation(); return; }
     const tab = ev.target.closest(".tab");
@@ -1710,7 +1876,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     const name = el.dataset.act;
     const fn = actions[name];
     if (!fn) return;
-    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset", "keep-local", "logout"].includes(name);
+    const keepArm = ["del-entry", "hide-act", "apply-tpl", "import", "reset", "keep-local", "logout", "note-del"].includes(name);
     if (!keepArm) ui.armed = null;
     const res = fn(el, ev);
     if (res !== false) render();
@@ -1718,13 +1884,19 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
   document.addEventListener("input", (ev) => {
     if (ev.target.id === "entry-note" && ui.sheet) ui.sheet.draft.note = ev.target.value;
     if (ev.target.id === "new-anchor-name" && ui.sheet) ui.sheet.newAnchorName = ev.target.value;
+    if (ev.target.id === "act-name" && ui.sheet) {
+      ui.sheet.name = ev.target.value;
+      if (ui.sheet.error) { ui.sheet.error = ""; document.querySelector(".sheet .error-line")?.remove(); }
+    }
     if (ev.target.id === "auth-email") ui.authEmail = ev.target.value;
     if (ev.target.id === "auth-pass") ui.authPass = ev.target.value;
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && ui.sheet) { closeSheet(); render(); }
+    if (ev.key === "Enter" && ev.target.id === "act-name") { ev.preventDefault(); if (actions["act-save"]() !== false) render(); return; }
     if (ev.key === "Enter" && ev.target.id === "new-anchor-name") { ev.preventDefault(); actions["create-anchor"](); return; }
-    if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions["save-entry"](); render(); }
+    if (ev.key === "Enter" && ev.target.id === "entry-note") { ev.preventDefault(); actions[ui.sheet.mode === "rec" ? "rec-save" : "save-entry"](); render(); }
+    if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches && ev.target.matches(".row.tappable")) { ev.preventDefault(); ev.target.click(); }
   });
   document.addEventListener("submit", (ev) => {
     if (ev.target.id === "auth-form") {
@@ -1748,6 +1920,7 @@ textarea.field { min-height: 110px; font: 12px/1.5 var(--mono); resize: vertical
     save(); toast(cat === "rhythm" ? "已加入「日常节奏」，也是一个锚点" : `已加入「${catById(cat).name}」`); render();
   });
   document.addEventListener("change", (ev) => {
+    if (ev.target.id === "act-cat" && ui.sheet) { ui.sheet.cat = ev.target.value; renderSheet(); return; }
     if (ev.target.id !== "backup-file") return;
     const f = ev.target.files && ev.target.files[0];
     if (!f) return;
